@@ -1,0 +1,160 @@
+{
+  "info": {
+    "coins": {
+      "address": 1886,
+      "type": "|u1"
+    },
+    "enemy_1_drawn": {
+      "address": 15,
+      "type": ">u1"
+    },
+    "enemy_1_hitbox_x1": {
+      "address": 1200,
+      "type": ">u1"
+    },
+    "enemy_1_hitbox_x2": {
+      "address": 1202,
+      "type": ">u1"
+    },
+    "enemy_1_hitbox_y1": {
+      "address": 1201,
+      "type": ">u1"
+    },
+    "enemy_1_hitbox_y2": {
+      "address": 1203,
+      "type": ">u1"
+    },
+    "enemy_2_drawn": {
+      "address": 16,
+      "type": ">u1"
+    },
+    "enemy_2_hitbox_x1": {
+      "address": 1204,
+      "type": ">u1"
+    },
+    "enemy_2_hitbox_x2": {
+      "address": 1206,
+      "type": ">u1"
+    },
+    "enemy_2_hitbox_y1": {
+      "address": 1205,
+      "type": ">u1"
+    },
+    "enemy_2_hitbox_y2": {
+      "address": 1207,
+      "type": ">u1"
+    },
+    "enemy_3_drawn": {
+      "address": 17,
+      "type": ">u1"
+    },
+    "enemy_3_hitbox_x1": {
+      "address": 1208,
+      "type": ">u1"
+    },
+    "enemy_3_hitbox_x2": {
+      "address": 1210,
+      "type": ">u1"
+    },
+    "enemy_3_hitbox_y1": {
+      "address": 1209,
+      "type": ">u1"
+    },
+    "enemy_3_hitbox_y2": {
+      "address": 1211,
+      "type": ">u1"
+    },
+    "enemy_4_drawn": {
+      "address": 18,
+      "type": ">u1"
+    },
+    "enemy_4_hitbox_x1": {
+      "address": 1212,
+      "type": ">u1"
+    },
+    "enemy_4_hitbox_x2": {
+      "address": 1214,
+      "type": ">u1"
+    },
+    "enemy_4_hitbox_y1": {
+      "address": 1213,
+      "type": ">u1"
+    },
+    "enemy_4_hitbox_y2": {
+      "address": 1215,
+      "type": ">u1"
+    },
+    "enemy_5_drawn": {
+      "address": 19,
+      "type": ">u1"
+    },
+    "enemy_5_hitbox_x1": {
+      "address": 1216,
+      "type": ">u1"
+    },
+    "enemy_5_hitbox_x2": {
+      "address": 1218,
+      "type": ">u1"
+    },
+    "enemy_5_hitbox_y1": {
+      "address": 1217,
+      "type": ">u1"
+    },
+    "enemy_5_hitbox_y2": {
+      "address": 1219,
+      "type": ">u1"
+    },
+    "levelHi": {
+      "address": 1887,
+      "type": "|i1"
+    },
+    "levelLo": {
+      "address": 1884,
+      "type": "|i1"
+    },
+    "lives": {
+      "address": 1882,
+      "type": "|i1"
+    },
+    "player_collision": {
+      "address": 1168,
+      "type": ">u1"
+    },
+    "player_hitbox_x1": {
+      "address": 1196,
+      "type": ">u1"
+    },
+    "player_hitbox_x2": {
+      "address": 1198,
+      "type": ">u1"
+    },
+    "player_hitbox_y1": {
+      "address": 1197,
+      "type": ">u1"
+    },
+    "player_hitbox_y2": {
+      "address": 1199,
+      "type": ">u1"
+    },
+    "score": {
+      "address": 2013,
+      "type": ">n6"
+    },
+    "scrolling": {
+      "address": 1912,
+      "type": "|i1"
+    },
+    "time": {
+      "address": 2040,
+      "type": ">n3"
+    },
+    "xscrollHi": {
+      "address": 1818,
+      "type": "|u1"
+    },
+    "xscrollLo": {
+      "address": 1820,
+      "type": "|u1"
+    }
+  }
+}
