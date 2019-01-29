@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
-import argparse, os, sys
+import argparse, os, sys, time, math
 import retro
 
 import numpy as np
 from matplotlib import pyplot as plt
+
+from sklearn.preprocessing import minmax_scale
 
 from skimage import color
 from skimage.measure import block_reduce
@@ -14,10 +16,13 @@ import neat
 from neat.six_util import iteritems
 import visualize
 
+from curses import wrapper
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--game', default='SuperMarioBros-Nes', help='the name or path for the game to run')
 parser.add_argument('--state', default='Level1-1', help='the initial state file to load, minus the extension')
-parser.add_argument('--scenario', '-s', default='neat_scenario.json', help='the scenario file to load, minus the extension')
+parser.add_argument('--scenario', '-s', default='scenario.json', help='the scenario file to load, minus the extension')
 parser.add_argument('--record', '-r', action='store_true', help='record bk2 movies')
 parser.add_argument('--verbose', '-v', action='count', default=1, help='increase verbosity (can be specified multiple times)')
 parser.add_argument('--quiet', '-q', action='count', default=0, help='decrease verbosity (can be specified multiple times)')
@@ -30,61 +35,102 @@ verbosity = args.verbose - args.quiet
 TIMEOUT_DEFAULT = 75
 
 
-def get_inputs(ob):
-    greyed_ob = color.rgb2gray(color.yiq2rgb(ob))
-    # perform downsampling on the array
-    reduced_greyed_ob = block_reduce(greyed_ob, (4, 4))
-    return reduced_greyed_ob.flatten()
+def get_inputs(frame, info):
+    ''' Uses the given frame to compute an output for each 16x16 block of pixels.
+        Extracts player position and enemy positions (-1 if unavailable) from info.
+            Returns: A list of inputs to be fed to the NEAT network '''
+    tiles = get_tiles(frame, get_player_pos(info), 2, info['xscrollLo'])
+    ret = []
+    for tile in tiles:
+        # convert tile to greyscale, normalize and compute the mean
+        ret.append(np.mean(minmax_scale(color.rgb2gray(tile))))
 
 
-def get_tiles(frame, x_scroll_lo):
-    # returns the 16x16 tiles from the given frame
 
-    diff = (x_scroll_lo + 8) % 16
+def classify_tiles(tiles):
+    # TODO
+    pass
 
+
+def align_frame(frame, x_scroll_lo):
+    ''' Aligns the current frame to 16x16 tiles based on x_scroll_lo
+            Returns: The aligned frame'''
+    left_diff = 16 - ((x_scroll_lo + 8) % 16)
+    right_diff = -1 * (16 - left_diff)  # can be 0 if x_scroll_lo == 8
     # adjust the image (remove 8 pixels from the bottom, left and right)
-    cropped = frame[:-8, diff:-diff]
+    if right_diff == 0:
+        aligned = frame[8:-8, left_diff:]
+    else:
+        aligned = frame[8:-8, left_diff:right_diff]
+    return aligned
 
-    fig = plt.figure()
+def closest(x, center, d=1):
+    ''' Takes a numpy array and returns all points of distance d from center'''
+    return x[center[0]-d:center[0]+d+1, center[1]-d:center[1]+d+1]
 
-    fig.add_subplot(1, 2, 1)
-    plt.imshow(frame)
-    fig.add_subplot(1, 2, 2)
-    plt.imshow(cropped)
+def get_radius_tiles(frame, center, radius):
+    tiles = []
+    for x in range(0, frame.shape[0], 16):
+        temp = []
+        for y in range(0, frame.shape[1], 16):
+            temp.append(frame[x:x + 16, y:y + 16])
+        tiles.append(temp)
+    tiles = np.array(tiles)
+    print(tiles.shape)
 
+    # rebuild the tile list to an image
+    a = []
+    for row in tiles:
+        r = np.hstack(row).reshape(16, tiles.shape[1]*tiles.shape[3], 3)
+        a.append(r)
+    image = np.vstack(a)
+    plt.imshow(image)
     plt.show()
 
-    return [cropped[x:x+16, y:y+16] for x in range(0, cropped.shape[0], 16) for y in range(0, cropped.shape[1], 16)]
+
+def get_tiles(frame, center, radius, x_scroll_lo, display_tiles=False):
+    ''' Gets the tiles around the given center and inside radius.
+        The tiles are aligned using x_scroll_lo.
+            Returns: A list of 16x16 tiles'''
+
+    aligned = align_frame(frame, x_scroll_lo)
+
+    tiles = get_radius_tiles(aligned, center, radius)
+    tiles = [j for sub in tiles for j in sub] # flatten to 1D
+
+    if display_tiles:
+        print("Generating tile graph of the current frame..")
+
+        s = int(math.ceil(math.sqrt(len(tiles))))
+        fig2, ax2 = plt.subplots(nrows=s - 1, ncols=s)
+        for i, row in enumerate(ax2):
+            for j, col in enumerate(row):
+                try:
+                    col.imshow(tiles[(s * i) + j])
+                except IndexError:
+                    break
+                col.axes.get_yaxis().set_visible(False)
+                col.axes.get_xaxis().set_visible(False)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        major_ticks = np.arange(0, 256, 16)
+        ax.set_xticks(major_ticks)
+        ax.set_yticks(major_ticks)
+        ax.imshow(aligned)
+        plt.grid(True)
+
+        print("Done.")
+
+        plt.show()
+
+    return tiles
 
 
-def segment_frame(frame):
-    '''
-    grey_frame = color.rgb2gray(frame)
-    edges = canny(grey_frame)
-    fill = ndi.binary_fill_holes(edges)
-    label_objects, nb_labels = ndi.label(fill)
-    sizes = np.bincount(label_objects.ravel())
-    mask_sizes = sizes > 20
-    mask_sizes[0] = 0
-    cleaned = mask_sizes[label_objects]
-    '''
-
-    frame = color.rgb2hsv(frame)
-
-    fig = plt.figure()
-
-    fig.add_subplot(2, 2, 1)
-    plt.imshow(frame, interpolation='nearest')
-    fig.add_subplot(2, 2, 2)
-    plt.imshow(slic(frame, n_segments=30, compactness=0.00001, sigma=1))
-    fig.add_subplot(2, 2, 3)
-    plt.imshow(slic(frame, n_segments=20, compactness=10, sigma=1))
-    fig.add_subplot(2, 2, 4)
-    plt.imshow(felzenszwalb(frame, sigma=1.5), interpolation='nearest', cmap="gray")   # USE THIS
-
-    plt.show()
-
-    sys.exit(0)
+def get_player_pos(info):
+    ''' Returns: The center coordinate of the player as (x, y)'''
+    print(info)
+    return (info['player_hitbox_x2']-info['player_hitbox_x1'], info['player_hitbox_y2']- info['player_hitbox_y1'])
 
 
 def main(config_file):
@@ -94,11 +140,12 @@ def main(config_file):
                          config_file)
 
     # Create the population, which is the top-level object for a NEAT run.
-    print("Generating population..")
+    print("Generating NEAT population..")
     p = neat.Population(config)
     print("Population Generated.")
 
     info = None
+    inputs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]).astype(np.uint8)
     while True:
         for genome_id, genome in list(iteritems(p.population)):
             try:
@@ -113,23 +160,20 @@ def main(config_file):
                     # Evaluate the current genome
 
                     if t % 10 == 0:
+
                         if verbosity > 1:
                             infostr = ''
                             if info:
                                 infostr = ', info: ' + ', '.join(['%s=%i' % (k, v) for k, v in info.items()])
                             print(('t=%i' % t) + infostr)
-                        #if info:
-                        #    getTiles(ob, info['xscrollLo'])
 
-                        #segment_frame(ob)
-
-                        inputs = get_inputs(ob)
-
-                        outputs = net.activate(inputs)
+                        if info is not None:
+                            inputs = get_inputs(ob, info)
+                        #outputs = net.activate(inputs)
 
                         env.render()
 
-                    ob, rew, done, info = env.step(outputs)
+                    ob, rew, done, info = env.step(inputs)
 
                     t += 1
 
