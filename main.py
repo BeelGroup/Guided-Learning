@@ -39,7 +39,9 @@ def get_inputs(frame, info):
     ''' Uses the given frame to compute an output for each 16x16 block of pixels.
         Extracts player position and enemy positions (-1 if unavailable) from info.
             Returns: A list of inputs to be fed to the NEAT network '''
-    tiles = get_tiles(frame, get_player_pos(info), 2, info['xscrollLo'])
+    player_pos = get_player_pos(info)
+    print("Player Pos: {}".format(player_pos))
+    tiles = get_tiles(frame, player_pos, 2, info['xscrollLo'])
     ret = []
     for tile in tiles:
         # convert tile to greyscale, normalize and compute the mean
@@ -64,38 +66,95 @@ def align_frame(frame, x_scroll_lo):
         aligned = frame[8:-8, left_diff:right_diff]
     return aligned
 
-def closest(x, center, d=1):
-    ''' Takes a numpy array and returns all points of distance d from center'''
-    return x[center[0]-d:center[0]+d+1, center[1]-d:center[1]+d+1]
 
-def get_radius_tiles(frame, center, radius):
-    tiles = []
-    for x in range(0, frame.shape[0], 16):
-        temp = []
-        for y in range(0, frame.shape[1], 16):
-            temp.append(frame[x:x + 16, y:y + 16])
-        tiles.append(temp)
-    tiles = np.array(tiles)
-    print(tiles.shape)
+def get_surrounding_tiles(tiles, center, d=1):
+    ''' Takes a numpy array of tiles and returns all points of distance d from center (x,y) of the tiles array'''
+    print("Center Tile: {}".format(center))
+    t = tiles[center[0]+1-d:center[0]+1+d+1, center[1]-1-d:center[1]-1+d+1]
+    return t
 
-    # rebuild the tile list to an image
-    a = []
-    for row in tiles:
-        r = np.hstack(row).reshape(16, tiles.shape[1]*tiles.shape[3], 3)
-        a.append(r)
-    image = np.vstack(a)
-    plt.imshow(image)
+
+def stitch_tiles(tiles):
+    ''' Rebuilds the given tile list (in row major order) to an image
+            Returns: 3D numpy array'''
+    ret = np.empty((tiles.shape[0] * 16, 0, tiles.shape[4]), dtype=np.uint8)
+    for r in tiles:
+        tmp = np.empty((0, 16, tiles.shape[4]), dtype=np.uint8)
+        for c in r:
+            tmp = np.concatenate((tmp, c), axis=0)
+        ret = np.concatenate((ret, tmp), axis=1)
+    return ret
+
+
+def get_tiles_from_frame(frame, tile_width, tile_height):
+    ''' Tiles the given frame into images of the given size
+            Returns: A numpy array of tiles in row major order'''
+
+    tiles = np.empty((int(frame.shape[0]/16), int(frame.shape[1]/16), 16, 16, 3), dtype=np.uint8)
+
+    # TODO: Convert to ROW MAJOR (swap tiles[col_count, row_count]) but the player positioning breaks
+    col_count = 0
+    for y in range(0, frame.shape[0], tile_height):
+        row_count = 0
+        for x in range(0, frame.shape[1], tile_width):
+            t = frame[x:x + 16, y:y + 16] # TODO: verify x and y are correct here
+            if t.shape == (16, 16, 3):
+                tiles[col_count, row_count, :, :, :] = t
+                row_count += 1
+        col_count += 1
+    return tiles
+
+
+def get_tile_index_of_player_pos(tiles, player_pos):
+    # reverse coordinates for (0,0) on bottom left to (0,0) on top left
+    # player_pos is in the form (y, x)
+    p = (player_pos[1], (tiles.shape[0]*16)-player_pos[0])
+    p_row = None
+    p_col = None
+    for i, row in enumerate(tiles):
+        if p[1] > i*16 and p[1] < (i+1)*16:
+            p_row = i
+        else:
+            continue
+        for j, col in enumerate(row):
+            if p[0] > j*16 and p[0] < (j+1)*16:
+                p_col = j
+    assert(p_row is not None and p_col is not None)
+    return (p_col, p_row)
+
+
+
+
+def get_radius_tiles(frame, player_pos, radius):
+    tiles = get_tiles_from_frame(frame, 16, 16)
+    player_tile_pos = get_tile_index_of_player_pos(tiles, player_pos)
+
+
+    closest = get_surrounding_tiles(tiles, player_tile_pos, 1)
+    '''
+    for row in closest:
+        for col in row:
+            plt.imshow(col)
+            plt.show()
+    '''
+
+    s = stitch_tiles(closest)
+    plt.imshow(s)
     plt.show()
 
 
-def get_tiles(frame, center, radius, x_scroll_lo, display_tiles=False):
+def get_tiles(frame, player_pos, radius, x_scroll_lo, display_tiles=False):
     ''' Gets the tiles around the given center and inside radius.
         The tiles are aligned using x_scroll_lo.
             Returns: A list of 16x16 tiles'''
 
     aligned = align_frame(frame, x_scroll_lo)
 
-    tiles = get_radius_tiles(aligned, center, radius)
+    tiles = get_radius_tiles(aligned, player_pos, radius)
+    for row in tiles:
+        for col in row:
+            plt.imshow(col)
+            plt.show()
     tiles = [j for sub in tiles for j in sub] # flatten to 1D
 
     if display_tiles:
@@ -129,7 +188,6 @@ def get_tiles(frame, center, radius, x_scroll_lo, display_tiles=False):
 
 def get_player_pos(info):
     ''' Returns: The center coordinate of the player as (x, y)'''
-    print(info)
     return (info['player_hitbox_x2']-info['player_hitbox_x1'], info['player_hitbox_y2']- info['player_hitbox_y1'])
 
 
