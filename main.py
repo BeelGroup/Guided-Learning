@@ -12,7 +12,7 @@ import neat
 from neat.six_util import iteritems
 import visualize
 
-from inputs import get_inputs
+from inputs import get_neat_inputs
 
 
 
@@ -27,6 +27,7 @@ parser.add_argument('--players', '-p', type=int, default=1, help='number of play
 args = parser.parse_args()
 
 env = retro.make(args.game, args.state or retro.State.DEFAULT, scenario=args.scenario, record=args.record, players=args.players)
+
 verbosity = args.verbose - args.quiet
 
 TIMEOUT_DEFAULT = 75
@@ -51,12 +52,15 @@ def main(config_file):
                 net = neat.nn.FeedForwardNetwork.create(genome, config)
 
                 ob = env.reset()
+
                 t = 0
                 timeout = TIMEOUT_DEFAULT
                 totrew = [0] * args.players
 
                 while True:
                     # Evaluate the current genome
+
+
 
                     if t % 10 == 0:
 
@@ -67,10 +71,11 @@ def main(config_file):
                             print(('t=%i' % t) + infostr)
 
                         if info is not None:
-                            inputs = get_inputs(ob, info)
+                            inputs = get_neat_inputs(ob, info)
                         #outputs = net.activate(inputs)
 
                         env.render()
+
 
                     ob, rew, done, info = env.step(inputs)
 
