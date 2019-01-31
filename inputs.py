@@ -7,13 +7,74 @@ from skimage import color
 
 import pyglet
 
+def get_keyboard_input(obs, win):
+    key_handler = pyglet.window.key.KeyStateHandler()
+
+    joysticks = pyglet.input.get_joysticks()
+    if len(joysticks) > 0:
+        joystick = joysticks[0]
+        joystick.open()
+    else:
+        joystick = None
+
+    win.push_handlers(key_handler)
+
+    key_previous_states = {}
+    button_previous_states = {}
+
+    pyglet.app.platform_event_loop.start()
+
+    while True:
+        win.dispatch_events()
+
+        win.clear()
+
+        keys_clicked = set()
+        keys_pressed = set()
+
+        for key_code, pressed in key_handler.items():
+            if pressed:
+                keys_pressed.add(key_code)
+
+            if not key_previous_states.get(key_code, False) and pressed:
+                keys_clicked.add(key_code)
+            key_previous_states[key_code] = pressed
+
+        buttons_clicked = set()
+        buttons_pressed = set()
+        if joystick is not None:
+            for button_code, pressed in enumerate(joystick.buttons):
+                if pressed:
+                    buttons_pressed.add(button_code)
+
+                if not button_previous_states.get(button_code, False) and pressed:
+                    buttons_clicked.add(button_code)
+                button_previous_states[button_code] = pressed
+
+        print(keys_pressed)
+
+    sys.exit(0)
+
+
+
+
+
 def get_neat_inputs(frame, info, config):
     '''Uses the given frame to compute an output for each 16x16 block of pixels.
         Extracts player position and enemy positions (-1 if unavailable) from info.
             Returns: A list of inputs to be fed to the NEAT network '''
 
+    # player_pos_x, player_pos_y, enemy_n_pos_x, enemy_n_pos_y, tile_input
+    inputs = []
+
     player_pos = get_player_pos(info)
+    inputs.append(player_pos[0])
+    inputs.append(player_pos[1])
+
     enemy_pos = get_enemy_pos(info)
+    for enemy in enemy_pos:
+        inputs.append(enemy[0])
+        inputs.append(enemy[1])
 
     if config.getboolean('inputs_greyscale'):
         frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114])
@@ -22,13 +83,22 @@ def get_neat_inputs(frame, info, config):
     tiles = get_tiles(frame, 16, 16, info['xscrollLo'], player_pos=player_pos, radius=3)
 
     # Get an array of average values per tile (this may have 3 values for RGB or 1 for greyscale)
-    tile_avg = np.mean(np.mean(tiles, axis=3, dtype=np.uint16), axis=2, dtype=np.uint16) # addition overflows uint8
-    print(tile_avg)
+    tile_avg = np.mean(tiles, axis=3, dtype=np.uint16)
+
+    if config.getboolean('inputs_greyscale'):
+        # the greyscale value is in all 3 positions so just get the first
+        tile_inputs = tile_avg[:, :, :, 0:1].flatten().tolist()
+    else:
+        tile_inputs = tile_avg[:, :, :, :].flatten().tolist()
+
+    inputs = inputs + tile_inputs
 
     if __debug__:
-        print("Player Pos: {}".format(player_pos))
-        print("Enemy Pos: \n{}".format(enemy_pos))
-        print("Displaying tile inputs:")
+        print("[get_neat_inputs] Player Pos: {}".format(player_pos))
+        print("[get_neat_inputs] Enemy Pos: {}".format(enemy_pos))
+        print("[get_neat_inputs] Input Length: {}".format(len(inputs)))
+        #print("[get_neat_inputs] Inputs: {}".format(inputs))
+        print("[get_neat_inputs] Displaying tile inputs:")
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         major_ticks = np.arange(0, 256, 16)
@@ -37,6 +107,8 @@ def get_neat_inputs(frame, info, config):
         ax.imshow(stitch_tiles(tiles, 16, 16))
         plt.grid(True)
         plt.show()
+
+    return inputs
 
 
 def get_tiles(frame, tile_width, tile_height, x_scroll_lo, player_pos=None, radius=None, display_tiles=False):
@@ -126,17 +198,14 @@ def get_tile_index_of_player(tiles, player_pos, tile_width, tile_height):
 
 
 def stitch_tiles(tiles, tile_width, tile_height):
-    # TODO: Convert to ROW MAJOR
     ''' Rebuilds the given tile list (in col major order) to an image. Mostly for testing.
             Returns: 3D numpy array'''
     #print(tiles.shape)
     ret = np.empty((tiles.shape[1] * tile_width, 0, tiles.shape[4]), dtype=np.uint8)
-    for r in tiles:
+    for col in tiles:
         tmp = np.empty((0, tile_height, tiles.shape[4]), dtype=np.uint8)
-        for c in r:
-            tmp = np.concatenate((tmp, c), axis=0)
-        #print(ret.shape)
-        #print(tmp.shape)
+        for row in col:
+            tmp = np.concatenate((tmp, row), axis=0)
         ret = np.concatenate((ret, tmp), axis=1)
     return ret
 

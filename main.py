@@ -47,7 +47,7 @@ def main(config_file):
     print("Population Generated.")
 
     info = None
-    inputs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]).astype(np.uint8)
+    joystick_inputs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]).astype(np.uint8)
     while True:
         for genome_id, genome in list(iteritems(p.population)):
             try:
@@ -74,12 +74,12 @@ def main(config_file):
 
                         if info is not None:
                             inputs = get_neat_inputs(ob, info, mario_config['NEAT'])
-                        #outputs = net.activate(inputs)
+                            # TODO: Allow dynamic input length based on config['NEAT'].getboolean('inputs_greyscale')
+                            joystick_inputs = net.activate(inputs)
 
                         env.render()
 
-
-                    ob, rew, done, info = env.step(inputs)
+                    ob, rew, done, info = env.step(joystick_inputs)
 
                     t += 1
 
