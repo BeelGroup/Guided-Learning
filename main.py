@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import argparse, os, sys, time, math
+import argparse, configparser, os, sys, time, math
 import retro
 
 import numpy as np
@@ -15,7 +15,6 @@ import visualize
 from inputs import get_neat_inputs
 
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--game', default='SuperMarioBros-Nes', help='the name or path for the game to run')
 parser.add_argument('--state', default='Level1-1', help='the initial state file to load, minus the extension')
@@ -26,11 +25,14 @@ parser.add_argument('--quiet', '-q', action='count', default=0, help='decrease v
 parser.add_argument('--players', '-p', type=int, default=1, help='number of players/agents (default: 1)')
 args = parser.parse_args()
 
+mario_config = configparser.ConfigParser()
+mario_config.read('mario.config')
+
 env = retro.make(args.game, args.state or retro.State.DEFAULT, scenario=args.scenario, record=args.record, players=args.players)
 
 verbosity = args.verbose - args.quiet
 
-TIMEOUT_DEFAULT = 75
+TIMEOUT_DEFAULT = int(mario_config['NEAT']['timeout'])
 
 
 def main(config_file):
@@ -71,7 +73,7 @@ def main(config_file):
                             print(('t=%i' % t) + infostr)
 
                         if info is not None:
-                            inputs = get_neat_inputs(ob, info)
+                            inputs = get_neat_inputs(ob, info, mario_config['NEAT'])
                         #outputs = net.activate(inputs)
 
                         env.render()

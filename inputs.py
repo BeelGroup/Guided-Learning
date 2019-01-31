@@ -3,10 +3,11 @@ import sys, math
 import numpy as np
 from matplotlib import pyplot as plt
 
+from skimage import color
+
 import pyglet
 
-
-def get_neat_inputs(frame, info):
+def get_neat_inputs(frame, info, config):
     '''Uses the given frame to compute an output for each 16x16 block of pixels.
         Extracts player position and enemy positions (-1 if unavailable) from info.
             Returns: A list of inputs to be fed to the NEAT network '''
@@ -14,8 +15,15 @@ def get_neat_inputs(frame, info):
     player_pos = get_player_pos(info)
     enemy_pos = get_enemy_pos(info)
 
-    # Convert frame to greyscale?
+    if config.getboolean('inputs_greyscale'):
+        frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114])
+        frame.resize((frame.shape[0], frame.shape[1], 1))
+
     tiles = get_tiles(frame, 16, 16, info['xscrollLo'], player_pos=player_pos, radius=3)
+
+    # Get an array of average values per tile (this may have 3 values for RGB or 1 for greyscale)
+    tile_avg = np.mean(np.mean(tiles, axis=3, dtype=np.uint16), axis=2, dtype=np.uint16) # addition overflows uint8
+    print(tile_avg)
 
     if __debug__:
         print("Player Pos: {}".format(player_pos))
