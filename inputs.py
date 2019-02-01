@@ -1,9 +1,9 @@
 
-import sys, math
+import sys
 import numpy as np
 from matplotlib import pyplot as plt
 
-from skimage import color
+from utils import *
 
 import pyglet
 
@@ -67,11 +67,12 @@ def get_neat_inputs(frame, info, config):
     # player_pos_x, player_pos_y, enemy_n_pos_x, enemy_n_pos_y, tile_input
     inputs = []
 
-    player_pos = get_player_pos(info)
+    # raw positions are given in (y,x with origin at the bottom right)
+    player_pos = get_raw_player_pos(info)
     inputs.append(player_pos[0])
     inputs.append(player_pos[1])
 
-    enemy_pos = get_enemy_pos(info)
+    enemy_pos = get_raw_enemy_pos(info)
     for enemy in enemy_pos:
         inputs.append(enemy[0])
         inputs.append(enemy[1])
@@ -94,7 +95,7 @@ def get_neat_inputs(frame, info, config):
     inputs = inputs + tile_inputs
 
     if __debug__:
-        print("[get_neat_inputs] Player Pos: {}".format(player_pos))
+        print("[get_neat_inputs] Raw Player Pos: {}".format(player_pos))
         print("[get_neat_inputs] Enemy Pos: {}".format(enemy_pos))
         print("[get_neat_inputs] Input Length: {}".format(len(inputs)))
         #print("[get_neat_inputs] Inputs: {}".format(inputs))
@@ -121,9 +122,15 @@ def get_tiles(frame, tile_width, tile_height, x_scroll_lo, player_pos=None, radi
     # get the 16x16 tiles from the aligned frame
     tiles = tile_frame(aligned, tile_width, tile_height)
 
+    # remove noise from the 13th row
+    tiles[:,13,:,:,:] = 255
+
+
     if player_pos is not None and radius is not None:
         # get the index of the tile where the player is
         player_tile_pos = get_tile_index_of_player(tiles, player_pos, tile_width, tile_height)
+
+        print("[get_tiles] tiles.shape: {}".format(tiles.shape))
         tiles = get_surrounding_tiles(tiles, player_tile_pos, radius)
 
     return tiles
@@ -163,65 +170,65 @@ def tile_frame(frame, tile_width, tile_height):
 
 def get_surrounding_tiles(tiles, center, radius=1):
     ''' Takes a numpy array of tiles and returns all tiles of distance d from center (x,y) of the tiles array'''
-    # bound the indices (an index of -1 will return None)
-    l1_index = center[0] + 1 - radius
-    if l1_index < 0: l1_index = 0
-    r1_index = center[0] + 1 + radius + 1
-    if r1_index < 0: r1_index = 0
-    l2_index = center[1] - 1 - radius
-    if l2_index < 0: l2_index = 0
-    r2_index = center[1] - 1 + radius + 1
-    if r2_index < 0: r2_index = 0
-    if r2_index > 13: r2_index = 13 # There's hidden data at 14 (bottom of the screen) that is just noise and does not normally display
-    t = tiles[l1_index:r1_index, l2_index:r2_index]
+    # TODO: THIS MAKES THE INPUT SIZE A VARIABLE LENGTH, MUST PAD
+
+    left_col_index = center[0] - 1 - radius
+    right_col_index = center[0] + radius
+    top_row_index = center[1] - 1 - radius
+    bottom_row_index = center[1] + radius
+
+    # 14 rows, 13 columns of tiles
+    add_left_cols = abs(left_col_index) if left_col_index < 0 else 0
+    add_right_cols = right_col_index - 13 if right_col_index > 13 else 0
+    add_top_rows = abs(top_row_index) if top_row_index < 0 else 0
+    add_bottom_rows = bottom_row_index - 14 if bottom_row_index > 14 else 0  # -1 due to noise row at bottom
+
+    # bound the indices
+    if left_col_index < 0: left_col_index = 0
+    if top_row_index < 0: top_row_index = 0
+
+    tiles = tiles[left_col_index:right_col_index, top_row_index:bottom_row_index]
+
+    tiles_pad = pad(tiles, (tiles.shape[0] + add_left_cols+add_right_cols, tiles.shape[1]+add_bottom_rows+add_top_rows, tiles.shape[2], tiles.shape[3], tiles.shape[4]),
+                    (add_left_cols, add_top_rows, 0, 0, 0), dtype=np.uint8)
+
     if __debug__:
+        print("[get_surrounding_tiles] tiles.shape: {}".format(tiles.shape))
+        print("[get_surrounding_tiles] tiles_pad.shape: {}".format(tiles_pad.shape))
         print("[get_surrounding_tiles] Center Tile: {}".format(center))
-        print("[get_surrounding_tiles] indexing: {}:{}, {}:{}".format(l1_index, r1_index, l2_index, r2_index))
-    return t
+        print("[get_surrounding_tiles] indexing: {}:{}, {}:{}".format(left_col_index, right_col_index,
+                                                                      top_row_index, bottom_row_index))
+        print(
+            "[get_surrounding_tiles] adjust:\nAdd {} columns to the left\nAdd {} columns to the right\nAdd {} rows to the top\nAdd {} rows to the bottom".format(
+                add_left_cols, add_right_cols, add_top_rows, add_bottom_rows))
+
+    return tiles_pad
 
 
 def get_tile_index_of_player(tiles, player_pos, tile_width, tile_height):
-    # reverse coordinates for (0,0) on bottom left to (0,0) on top left. player_pos is in the form (y, x)
-    p = (player_pos[1], (tiles.shape[0] * tile_width) - player_pos[0])
+    p = player_pos
+
     p_row = None
     p_col = None
+
+    # bound the player position
+    if p[0] < 0:
+        p = (0, p[1])
+    if p[1] < 0:
+        p = (p[0], 0)
+    if p[1] > 208:
+        p = (p[0], 208)
+
     for i, row in enumerate(tiles):
-        if p[1] > i * tile_width and p[1] < (i + 1) * tile_width:
+        if p[1] > i * tile_height and p[1] <= (i + 1) * tile_height:
             p_row = i
         else:
             continue
         for j, col in enumerate(row):
-            if p[0] > j * tile_height and p[0] < (j + 1) * tile_height:
+            if p[0] > j * tile_width and p[0] <= (j + 1) * tile_width:
                 p_col = j
-    assert (p_row is not None and p_col is not None)
+    assert (p_col is not None and p_row is not None)
+
+    print("[get_tile_index_of_player] tile_index: {}".format((p_col, p_row)))
+
     return (p_col, p_row)
-
-
-def stitch_tiles(tiles, tile_width, tile_height):
-    ''' Rebuilds the given tile list (in col major order) to an image. Mostly for testing.
-            Returns: 3D numpy array'''
-    #print(tiles.shape)
-    ret = np.empty((tiles.shape[1] * tile_width, 0, tiles.shape[4]), dtype=np.uint8)
-    for col in tiles:
-        tmp = np.empty((0, tile_height, tiles.shape[4]), dtype=np.uint8)
-        for row in col:
-            tmp = np.concatenate((tmp, row), axis=0)
-        ret = np.concatenate((ret, tmp), axis=1)
-    return ret
-
-
-def get_enemy_pos(info):
-    enemy_pos = []
-    for i in range(1, 6):
-        enemy_drawn_str = "enemy_{}_drawn".format(i)
-        if info[enemy_drawn_str]:
-            enemy_hitbox_str = "enemy_{}_hitbox_".format(i)
-            enemy_pos.append((info[enemy_hitbox_str+"x2"] - info[enemy_hitbox_str+"x1"],
-                              info[enemy_hitbox_str+"y2"] - info[enemy_hitbox_str+"y1"]))
-        else:
-            enemy_pos.append((-1,-1))
-    return enemy_pos
-
-def get_player_pos(info):
-    ''' Returns: The center coordinate of the player as (x, y)'''
-    return (info['player_hitbox_x2'] - info['player_hitbox_x1'], info['player_hitbox_y2'] - info['player_hitbox_y1'])
