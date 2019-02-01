@@ -1,9 +1,6 @@
 
-import sys
-import numpy as np
-from matplotlib import pyplot as plt
-
 from utils import *
+
 
 import pyglet
 

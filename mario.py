@@ -4,6 +4,9 @@ import neat
 from neat.six_util import iteritems
 import numpy as np
 
+from matplotlib import pyplot as plt
+
+import visualize
 from inputs import *
 
 
@@ -14,8 +17,18 @@ class Mario:
         self.config = configparser.ConfigParser()
         self.config.read('mario.config')
 
+        # get the NEAT config
         self.neat_config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                              neat.DefaultSpeciesSet, neat.DefaultStagnation, neat_config_file)
+
+        '''
+        # TODO: Allow dynamic input length based on config['NEAT'].getboolean('inputs_greyscale')
+        # set the number of genome inputs dynamically based on RGB/Greyscale
+        self.num_inputs = (16*16*(int(self.config['NEAT']['inputs_radius']) ** 2)) + 25 + 4
+        if not self.config['NEAT'].getboolean('inputs_greyscale'):
+            self.num_inputs *= 3
+        self.neat_config.genome_config['num_inputs'] = self.num_inputs
+        '''
 
         self.env = env
         self.verbosity = verbosity
@@ -31,7 +44,13 @@ class Mario:
         # Create the population, which is the top-level object for a NEAT run.
         print("Generating NEAT population..")
         self.neat = neat.Population(self.neat_config)
+
+        # Add a stdout reporter to show progress in the terminal.
+        self.neat_stats = neat.StatisticsReporter()
+        self.neat.add_reporter(self.neat_stats)
+
         print("Population Generated.")
+
 
 
     def get_neat_inputs(self):
@@ -58,23 +77,23 @@ class Mario:
             frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114])
             frame.resize((frame.shape[0], frame.shape[1], 1))
 
-        tiles = get_tiles(frame, 16, 16, info['xscrollLo'], player_pos=player_pos, radius=3)
+        tiles = get_tiles(frame, 16, 16, info['xscrollLo'], player_pos=player_pos, radius=int(self.config['NEAT']['inputs_radius']))
 
         # Get an array of average values per tile (this may have 3 values for RGB or 1 for greyscale)
-        tile_avg = np.mean(tiles, axis=3, dtype=np.uint16)
+        tile_avg = np.mean(tiles, axis=3, dtype=np.uint16) # average across tile row
+        tile_avg = np.mean(tile_avg, axis=2, dtype=np.uint16)  # average across tile col
 
         if self.config['NEAT'].getboolean('inputs_greyscale'):
             # the greyscale value is in all 3 positions so just get the first
-            tile_inputs = tile_avg[:, :, :, 0:1].flatten().tolist()
+            tile_inputs = tile_avg[:, :, 0:1].flatten().tolist()
         else:
-            tile_inputs = tile_avg[:, :, :, :].flatten().tolist()
+            tile_inputs = tile_avg[:, :, :].flatten().tolist()
 
         inputs = inputs + tile_inputs
 
         if self.debug:
             print("[get_neat_inputs] Raw Player Pos: {}".format(player_pos))
             print("[get_neat_inputs] Raw Enemy Pos: {}".format(enemy_pos))
-            print("[get_neat_inputs] Input Length: {}".format(len(inputs)))
             if self.debug_graphs:
                 print("[get_neat_inputs] Displaying tile inputs:")
                 fig = plt.figure()
@@ -89,6 +108,7 @@ class Mario:
 
 
     def run(self):
+
         while True:
             for genome_id, genome in list(iteritems(self.neat.population)):
                 try:
@@ -111,9 +131,8 @@ class Mario:
 
                             if self.current_info is not None:
                                 inputs = self.get_neat_inputs()
-                                # TODO: Allow dynamic input length based on config['NEAT'].getboolean('inputs_greyscale')
-                                self.joystick_inputs = self.current_net.activate(inputs)
-
+                                raw_joystick_inputs = self.current_net.activate(inputs)
+                                self.joystick_inputs = [round(x) for x in raw_joystick_inputs]
                                 self.env.render()
 
                         self.current_frame, rew, done, self.current_info = self.env.step(self.joystick_inputs)
@@ -145,4 +164,8 @@ class Mario:
 
             # All genomes in the current population have been evaluated, get the best genome and move to the next generation
             self.neat.next_generation()
-            print("Best of gen: ", self.neat.generation - 1, "\nFitness: {!s}".format(self.neat.best_genome.fitness))
+            print("Best of gen: {} -- Fitness: {!s} -- Shape: {}".format(self.neat.generation-1, self.neat.best_genome.fitness, self.neat.best_genome.size()))
+            # visualise the champion
+            visualize.draw_net(self.neat_config, self.neat.best_genome, view=False, filename="img/gen_{}_genome".format(
+                self.neat.generation - 1))
+            visualize.plot_stats(self.neat_stats)

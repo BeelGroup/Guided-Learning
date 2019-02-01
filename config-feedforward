@@ -4,18 +4,18 @@
 no_fitness_termination = True
 fitness_criterion      = max
 fitness_threshold      = 3.9
-pop_size               = 150
+pop_size               = 15
 reset_on_extinction    = False
 
 [DefaultGenome]
 # node activation options
 activation_default      = sigmoid
-activation_mutate_rate  = 0.0
+activation_mutate_rate  = 0.01
 activation_options      = sigmoid
 
 # node aggregation options
 aggregation_default     = sum
-aggregation_mutate_rate = 0.0
+aggregation_mutate_rate = 0.01
 aggregation_options     = sum
 
 # node bias options
@@ -32,23 +32,23 @@ compatibility_disjoint_coefficient = 1.0
 compatibility_weight_coefficient   = 0.5
 
 # connection add/remove rates
-conn_add_prob           = 0.5
-conn_delete_prob        = 0.5
+conn_add_prob           = 0.2
+conn_delete_prob        = 0.19
 
 # connection enable options
 enabled_default         = True
 enabled_mutate_rate     = 0.01
 
 feed_forward            = True
-initial_connection      = partial_nodirect 0.7
+initial_connection      = partial_nodirect 0.6
 
 # node add/remove rates
 node_add_prob           = 0.2
-node_delete_prob        = 0.2
+node_delete_prob        = 0.19
 
 # network parameters
-num_hidden              = 0
-num_inputs              = 796
+num_hidden              = 2
+num_inputs              = 61
 num_outputs             = 8
 
 # node response options
@@ -79,4 +79,4 @@ species_elitism      = 2
 
 [DefaultReproduction]
 elitism            = 2
-survival_threshold = 0.2
+survival_threshold = 0.3
