@@ -11,7 +11,7 @@ SUPER MARIO WORLD actions:
 
 SUPER MARIO BROS actions:
 * [run (B), None, (Select), (Start), (Up), (Down), (Left), (Right), jump (A)]
-* NEAT outputs do not include the None, it's padded in later
+* NEAT outputs do not include the None, it's padded in later with 0
 
 Creating an action array:
 ```
@@ -42,6 +42,15 @@ When I was attempting more general segmentation this performed the best:
 ```
 plt.imshow(felzenszwalb(frame, sigma=1.5), interpolation='nearest', cmap="gray")
 ```
+
+### Backup saves
+Backup saves of the Mario obj are made to the saves/ directory each generation
+
+A save can be loaded by specifying -l followed by the file name.
+E.g. ```python main.py -l gen_5.bkup```
+
+The retro env cannot be pickled due to it holding C pointers. Therefore, during saving it is set to None and recovered and during load it must be set using set_env()
+
 
 ### Data
 Currently normalizing pixel tile data between [0,1]

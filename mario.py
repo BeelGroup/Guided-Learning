@@ -57,10 +57,12 @@ class Mario:
 
 
     def set_env(self, env):
+        ''' Used to set the Retro env after loading from picked file. '''
         self.env = env
 
 
     def save(self):
+        ''' Used to save the current state of self '''
         env = self.env
         self.env = None
         save_state(self, "saves/gen_{}.bkup".format(self.neat.generation - 1))
@@ -132,7 +134,7 @@ class Mario:
 
 
     def run(self):
-
+        ''' The main loop '''
         while True:
             for genome_id, genome in list(iteritems(self.neat.population)):
                 try:
@@ -157,9 +159,9 @@ class Mario:
                                 inputs = self.get_neat_inputs()
                                 raw_joystick_inputs = self.current_net.activate(inputs)
                                 # pad None into second position
-                                self.joystick_inputs = raw_joystick_inputs[:1] + [None] + raw_joystick_inputs[1:]
+                                self.joystick_inputs = raw_joystick_inputs[:1] + [0] + raw_joystick_inputs[1:]
                                 # round to 0 or 1
-                                self.joystick_inputs = np.asarray([round(x) for x in raw_joystick_inputs], dtype=np.uint8)
+                                self.joystick_inputs = np.asarray([round(x) for x in self.joystick_inputs], dtype=np.uint8)
 
                                 self.env.render()
 
