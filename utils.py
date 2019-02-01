@@ -15,6 +15,9 @@ def stitch_tiles(tiles, tile_width, tile_height):
     return ret
 
 
+def normalize_list(l, lower, upper):
+    return [lower + ((x-min(l)*(upper-lower))/(max(l)-min(l))) for x in l]
+
 def pad(array, reference_shape, offset, dtype):
     """
     array: Array to be padded

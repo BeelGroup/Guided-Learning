@@ -41,3 +41,10 @@ When I was attempting more general segmentation this performed the best:
 ```
 plt.imshow(felzenszwalb(frame, sigma=1.5), interpolation='nearest', cmap="gray")
 ```
+
+### Data
+Currently normalizing pixel tile data between [0,1]
+
+Normalizing player and enemy positions by dividing by screen size (%)
+
+When enemies are not drawn then enemy position is (-1,-1)

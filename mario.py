@@ -34,7 +34,7 @@ class Mario:
         self.verbosity = verbosity
         self.timeout = int(self.config['NEAT']['timeout'])
         self.current_frame = self.env.reset()
-        self.joystick_inputs = np.array([0, 0, 0, 0, 0, 0, 0, 1, 0]).astype(np.uint8)
+        self.joystick_inputs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]).astype(np.uint8)
         self.current_net = None
         self.current_info = None
 
@@ -65,13 +65,20 @@ class Mario:
 
         # raw positions are given in (y,x with origin at the bottom right)
         player_pos = get_raw_player_pos(info)
-        inputs.append(player_pos[0])
-        inputs.append(player_pos[1])
+
+        # normalize
+        inputs.append(player_pos[0] / frame.shape[0])
+        inputs.append(player_pos[1] / frame.shape[1])
 
         enemy_pos = get_raw_enemy_pos(info)
         for enemy in enemy_pos:
-            inputs.append(enemy[0])
-            inputs.append(enemy[1])
+            if enemy != (-1, -1):
+                # normalize
+                inputs.append(enemy[0] / frame.shape[0])
+                inputs.append(enemy[1] / frame.shape[1])
+            else:
+                inputs.append(enemy[0])
+                inputs.append(enemy[1])
 
         if self.config['NEAT'].getboolean('inputs_greyscale'):
             frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114])
@@ -89,7 +96,10 @@ class Mario:
         else:
             tile_inputs = tile_avg[:, :, :].flatten().tolist()
 
-        inputs = inputs + tile_inputs
+        # normalize the tile_inputs array
+        norm_tile_inputs = normalize_list(tile_inputs, 0, 1)
+
+        inputs = inputs + norm_tile_inputs
 
         if self.debug:
             print("[get_neat_inputs] Raw Player Pos: {}".format(player_pos))
@@ -132,7 +142,7 @@ class Mario:
                             if self.current_info is not None:
                                 inputs = self.get_neat_inputs()
                                 raw_joystick_inputs = self.current_net.activate(inputs)
-                                self.joystick_inputs = [round(x) for x in raw_joystick_inputs]
+                                self.joystick_inputs = np.asarray([round(x) for x in raw_joystick_inputs], dtype=np.uint8)
                                 self.env.render()
 
                         self.current_frame, rew, done, self.current_info = self.env.step(self.joystick_inputs)
