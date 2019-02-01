@@ -3,6 +3,7 @@ import retro
 import neat
 from neat.six_util import iteritems
 import numpy as np
+import pickle
 
 from matplotlib import pyplot as plt
 
@@ -54,6 +55,16 @@ class Mario:
 
         print("Population Generated.")
 
+
+    def set_env(self, env):
+        self.env = env
+
+
+    def save(self):
+        env = self.env
+        self.env = None
+        save_state(self, "saves/gen_{}.bkup".format(self.neat.generation - 1))
+        self.env = env
 
 
     def get_neat_inputs(self):
@@ -186,3 +197,6 @@ class Mario:
             visualize.draw_net(self.neat_config, self.neat.best_genome, view=False, filename="img/gen_{}_genome".format(
                 self.neat.generation - 1))
             visualize.plot_stats(self.neat_stats)
+            # save the current state
+            self.save()
+

@@ -1,5 +1,15 @@
-import sys
+import sys, pickle
 import numpy as np
+
+
+def save_state(obj, save_state_filename):
+    filehandler = open(save_state_filename, 'wb')
+    pickle.dump(obj, filehandler)
+
+
+def load_state(save_state_filename):
+    filehandler = open(save_state_filename, 'rb')
+    return pickle.load(filehandler)
 
 
 def stitch_tiles(tiles, tile_width, tile_height):
