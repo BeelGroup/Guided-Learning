@@ -10,7 +10,8 @@ SUPER MARIO WORLD actions:
 * [jump (B), run (Y), (Select), (Start), (Up), (Down), (Left), (Right), power_jump (A), run (X), (L), (R)]
 
 SUPER MARIO BROS actions:
-* [run (B), (Select), (Start), (Up), (Down), (Left), (Right), jump (A)]
+* [run (B), None, (Select), (Start), (Up), (Down), (Left), (Right), jump (A)]
+* NEAT outputs do not include the None, it's padded in later
 
 Creating an action array:
 ```

@@ -8,10 +8,13 @@ from matplotlib import pyplot as plt
 
 import visualize
 from inputs import *
-
+from human_input import humanInput
 
 class Mario:
-    def __init__(self, env, neat_config_file, verbosity=0):
+    def __init__(self, retro_env, neat_config_file, verbosity=0):
+
+        #human_input = humanInput(retro_env)
+
 
         # Load configuration.
         self.config = configparser.ConfigParser()
@@ -30,7 +33,7 @@ class Mario:
         self.neat_config.genome_config['num_inputs'] = self.num_inputs
         '''
 
-        self.env = env
+        self.env = retro_env
         self.verbosity = verbosity
         self.timeout = int(self.config['NEAT']['timeout'])
         self.current_frame = self.env.reset()
@@ -142,7 +145,11 @@ class Mario:
                             if self.current_info is not None:
                                 inputs = self.get_neat_inputs()
                                 raw_joystick_inputs = self.current_net.activate(inputs)
+                                # pad None into second position
+                                self.joystick_inputs = raw_joystick_inputs[:1] + [None] + raw_joystick_inputs[1:]
+                                # round to 0 or 1
                                 self.joystick_inputs = np.asarray([round(x) for x in raw_joystick_inputs], dtype=np.uint8)
+
                                 self.env.render()
 
                         self.current_frame, rew, done, self.current_info = self.env.step(self.joystick_inputs)
