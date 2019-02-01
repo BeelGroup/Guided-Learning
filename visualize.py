@@ -19,6 +19,7 @@ def plot_stats(statistics, ylog=False, view=False, filename='img/avg_fitness.svg
     avg_fitness = np.array(statistics.get_fitness_mean())
     stdev_fitness = np.array(statistics.get_fitness_stdev())
 
+    plt.figure(0, figsize=(15,15))
     plt.plot(generation, avg_fitness, 'b-', label="average")
     plt.plot(generation, avg_fitness - stdev_fitness, 'g-.', label="-1 sd")
     plt.plot(generation, avg_fitness + stdev_fitness, 'g-.', label="+1 sd")
