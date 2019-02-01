@@ -56,62 +56,6 @@ def get_keyboard_input(obs, win):
     sys.exit(0)
 
 
-
-
-
-def get_neat_inputs(frame, info, config):
-    '''Uses the given frame to compute an output for each 16x16 block of pixels.
-        Extracts player position and enemy positions (-1 if unavailable) from info.
-            Returns: A list of inputs to be fed to the NEAT network '''
-
-    # player_pos_x, player_pos_y, enemy_n_pos_x, enemy_n_pos_y, tile_input
-    inputs = []
-
-    # raw positions are given in (y,x with origin at the bottom right)
-    player_pos = get_raw_player_pos(info)
-    inputs.append(player_pos[0])
-    inputs.append(player_pos[1])
-
-    enemy_pos = get_raw_enemy_pos(info)
-    for enemy in enemy_pos:
-        inputs.append(enemy[0])
-        inputs.append(enemy[1])
-
-    if config.getboolean('inputs_greyscale'):
-        frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114])
-        frame.resize((frame.shape[0], frame.shape[1], 1))
-
-    tiles = get_tiles(frame, 16, 16, info['xscrollLo'], player_pos=player_pos, radius=3)
-
-    # Get an array of average values per tile (this may have 3 values for RGB or 1 for greyscale)
-    tile_avg = np.mean(tiles, axis=3, dtype=np.uint16)
-
-    if config.getboolean('inputs_greyscale'):
-        # the greyscale value is in all 3 positions so just get the first
-        tile_inputs = tile_avg[:, :, :, 0:1].flatten().tolist()
-    else:
-        tile_inputs = tile_avg[:, :, :, :].flatten().tolist()
-
-    inputs = inputs + tile_inputs
-
-    if __debug__:
-        print("[get_neat_inputs] Raw Player Pos: {}".format(player_pos))
-        print("[get_neat_inputs] Enemy Pos: {}".format(enemy_pos))
-        print("[get_neat_inputs] Input Length: {}".format(len(inputs)))
-        #print("[get_neat_inputs] Inputs: {}".format(inputs))
-        print("[get_neat_inputs] Displaying tile inputs:")
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        major_ticks = np.arange(0, 256, 16)
-        ax.set_xticks(major_ticks)
-        ax.set_yticks(major_ticks)
-        ax.imshow(stitch_tiles(tiles, 16, 16))
-        plt.grid(True)
-        plt.show()
-
-    return inputs
-
-
 def get_tiles(frame, tile_width, tile_height, x_scroll_lo, player_pos=None, radius=None, display_tiles=False):
     ''' Tiles the given frame. Optionally gets the tiles surrounding the given player_pos within radius
             Returns: A numpy array of 16x16 tiles'''
@@ -125,12 +69,9 @@ def get_tiles(frame, tile_width, tile_height, x_scroll_lo, player_pos=None, radi
     # remove noise from the 13th row
     tiles[:,13,:,:,:] = 255
 
-
     if player_pos is not None and radius is not None:
         # get the index of the tile where the player is
         player_tile_pos = get_tile_index_of_player(tiles, player_pos, tile_width, tile_height)
-
-        print("[get_tiles] tiles.shape: {}".format(tiles.shape))
         tiles = get_surrounding_tiles(tiles, player_tile_pos, radius)
 
     return tiles
@@ -169,8 +110,8 @@ def tile_frame(frame, tile_width, tile_height):
 
 
 def get_surrounding_tiles(tiles, center, radius=1):
-    ''' Takes a numpy array of tiles and returns all tiles of distance d from center (x,y) of the tiles array'''
-    # TODO: THIS MAKES THE INPUT SIZE A VARIABLE LENGTH, MUST PAD
+    ''' Takes a numpy array of tiles and returns all tiles of distance d from center (x,y) of the tiles array
+        The output array is padded as necessary '''
 
     left_col_index = center[0] - 1 - radius
     right_col_index = center[0] + radius
@@ -191,17 +132,6 @@ def get_surrounding_tiles(tiles, center, radius=1):
 
     tiles_pad = pad(tiles, (tiles.shape[0] + add_left_cols+add_right_cols, tiles.shape[1]+add_bottom_rows+add_top_rows, tiles.shape[2], tiles.shape[3], tiles.shape[4]),
                     (add_left_cols, add_top_rows, 0, 0, 0), dtype=np.uint8)
-
-    if __debug__:
-        print("[get_surrounding_tiles] tiles.shape: {}".format(tiles.shape))
-        print("[get_surrounding_tiles] tiles_pad.shape: {}".format(tiles_pad.shape))
-        print("[get_surrounding_tiles] Center Tile: {}".format(center))
-        print("[get_surrounding_tiles] indexing: {}:{}, {}:{}".format(left_col_index, right_col_index,
-                                                                      top_row_index, bottom_row_index))
-        print(
-            "[get_surrounding_tiles] adjust:\nAdd {} columns to the left\nAdd {} columns to the right\nAdd {} rows to the top\nAdd {} rows to the bottom".format(
-                add_left_cols, add_right_cols, add_top_rows, add_bottom_rows))
-
     return tiles_pad
 
 
@@ -228,7 +158,5 @@ def get_tile_index_of_player(tiles, player_pos, tile_width, tile_height):
             if p[0] > j * tile_width and p[0] <= (j + 1) * tile_width:
                 p_col = j
     assert (p_col is not None and p_row is not None)
-
-    print("[get_tile_index_of_player] tile_index: {}".format((p_col, p_row)))
 
     return (p_col, p_row)

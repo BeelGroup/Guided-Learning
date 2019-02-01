@@ -4,31 +4,88 @@ import neat
 from neat.six_util import iteritems
 import numpy as np
 
-from inputs import get_neat_inputs
+from inputs import *
 
 
 class Mario:
     def __init__(self, env, neat_config_file, verbosity=0):
 
         # Load configuration.
-        self.mario_config = configparser.ConfigParser()
-        self.mario_config.read('mario.config')
+        self.config = configparser.ConfigParser()
+        self.config.read('mario.config')
 
         self.neat_config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                              neat.DefaultSpeciesSet, neat.DefaultStagnation, neat_config_file)
 
         self.env = env
         self.verbosity = verbosity
-        self.timeout = int(self.mario_config['NEAT']['timeout'])
+        self.timeout = int(self.config['NEAT']['timeout'])
         self.current_frame = self.env.reset()
         self.joystick_inputs = np.array([0, 0, 0, 0, 0, 0, 0, 1, 0]).astype(np.uint8)
         self.current_net = None
         self.current_info = None
 
+        self.debug = self.config['DEFAULT'].getboolean('debug')
+        self.debug_graphs = self.config['DEFAULT'].getboolean('debug_graphs')
+
         # Create the population, which is the top-level object for a NEAT run.
         print("Generating NEAT population..")
         self.neat = neat.Population(self.neat_config)
         print("Population Generated.")
+
+
+    def get_neat_inputs(self):
+        '''Uses the given frame to compute an output for each 16x16 block of pixels.
+            Extracts player position and enemy positions (-1 if unavailable) from info.
+                Returns: A list of inputs to be fed to the NEAT network '''
+        frame = self.current_frame
+        info = self.current_info
+
+        # player_pos_x, player_pos_y, enemy_n_pos_x, enemy_n_pos_y, tile_input
+        inputs = []
+
+        # raw positions are given in (y,x with origin at the bottom right)
+        player_pos = get_raw_player_pos(info)
+        inputs.append(player_pos[0])
+        inputs.append(player_pos[1])
+
+        enemy_pos = get_raw_enemy_pos(info)
+        for enemy in enemy_pos:
+            inputs.append(enemy[0])
+            inputs.append(enemy[1])
+
+        if self.config['NEAT'].getboolean('inputs_greyscale'):
+            frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114])
+            frame.resize((frame.shape[0], frame.shape[1], 1))
+
+        tiles = get_tiles(frame, 16, 16, info['xscrollLo'], player_pos=player_pos, radius=3)
+
+        # Get an array of average values per tile (this may have 3 values for RGB or 1 for greyscale)
+        tile_avg = np.mean(tiles, axis=3, dtype=np.uint16)
+
+        if self.config['NEAT'].getboolean('inputs_greyscale'):
+            # the greyscale value is in all 3 positions so just get the first
+            tile_inputs = tile_avg[:, :, :, 0:1].flatten().tolist()
+        else:
+            tile_inputs = tile_avg[:, :, :, :].flatten().tolist()
+
+        inputs = inputs + tile_inputs
+
+        if self.debug:
+            print("[get_neat_inputs] Raw Player Pos: {}".format(player_pos))
+            print("[get_neat_inputs] Raw Enemy Pos: {}".format(enemy_pos))
+            print("[get_neat_inputs] Input Length: {}".format(len(inputs)))
+            if self.debug_graphs:
+                print("[get_neat_inputs] Displaying tile inputs:")
+                fig = plt.figure()
+                ax = fig.add_subplot(1, 1, 1)
+                major_ticks = np.arange(0, 256, 16)
+                ax.set_xticks(major_ticks)
+                ax.set_yticks(major_ticks)
+                ax.imshow(stitch_tiles(tiles, 16, 16))
+                plt.grid(True)
+                plt.show()
+        return inputs
 
 
     def run(self):
@@ -41,12 +98,11 @@ class Mario:
 
                     t = 0
                     totrew = [0] * 1
-                    self.timeout = int(self.mario_config['NEAT']['timeout'])
+                    self.timeout = int(self.config['NEAT']['timeout'])
 
                     while True:
                         # Evaluate the current genome
                         if t % 10 == 0:
-                            print()
                             if self.verbosity > 1:
                                 infostr = ''
                                 if self.current_info:
@@ -54,9 +110,9 @@ class Mario:
                                 print(('t=%i' % t) + infostr)
 
                             if self.current_info is not None:
-                                inputs = get_neat_inputs(self.current_frame, self.current_info, self.mario_config['NEAT'])
+                                inputs = self.get_neat_inputs()
                                 # TODO: Allow dynamic input length based on config['NEAT'].getboolean('inputs_greyscale')
-                                # self.joystick_inputs = self.current_net.activate(inputs)
+                                self.joystick_inputs = self.current_net.activate(inputs)
 
                                 self.env.render()
 
@@ -68,7 +124,7 @@ class Mario:
                         for i, r in enumerate(rew):
                             totrew[i] += r
                             if r > 0:
-                                self.timeout = int(self.mario_config['NEAT']['timeout'])
+                                self.timeout = int(self.config['NEAT']['timeout'])
                             else:
                                 self.timeout -= 1
                                 if self.timeout < 0:

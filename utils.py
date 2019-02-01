@@ -27,8 +27,6 @@ def pad(array, reference_shape, offset, dtype):
     insertHere = [slice(offset[dim], offset[dim] + array.shape[dim]) for dim in range(array.ndim)]
     # Insert the array in the result at the specified offsets
     result[insertHere] = array
-    print("[pad] array.shape: {}".format(array.shape))
-    print("[pad] result.shape: {}".format(result.shape))
     return result
 
 
@@ -40,8 +38,9 @@ def get_raw_enemy_pos(info):
         enemy_drawn_str = "enemy_{}_drawn".format(i)
         if info[enemy_drawn_str]:
             enemy_hitbox_str = "enemy_{}_hitbox_".format(i)
-            enemy_pos.append((info[enemy_hitbox_str +"x2"] - info[enemy_hitbox_str +"x1"],
-                              info[enemy_hitbox_str +"y2"] - info[enemy_hitbox_str +"y1"]))
+            hitbox_width = info[enemy_hitbox_str + "x2"] - info[enemy_hitbox_str + "x1"]
+            hitbox_height = info[enemy_hitbox_str + "y2"] - info[enemy_hitbox_str + "y1"]
+            enemy_pos.append((info[enemy_hitbox_str + "x1"]+(hitbox_width/2), info[enemy_hitbox_str + "y1"]+(hitbox_height/2)))
         else:
             enemy_pos.append((-1 ,-1))
     return enemy_pos
