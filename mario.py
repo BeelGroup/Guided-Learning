@@ -11,7 +11,7 @@ from human_input import get_human_input
 class Mario:
     def __init__(self, retro_env, neat_config_file, verbosity=0):
 
-        print(get_human_input(retro_env))
+        #print(get_human_input(retro_env))
 
         # Load configuration.
         self.config = configparser.ConfigParser()
@@ -103,17 +103,16 @@ class Mario:
         return inputs
 
 
-    def run(self, framerate_limit):
+    def run(self, framerate_limit, gen_bkup=True):
         ''' The main loop '''
         frame_delay = 1000/framerate_limit if framerate_limit != -1 else 0
 
         while True:
 
             prev_best_fitness = None
+            stagnation_count = 0
             for genome_id, genome in list(iteritems(self.neat.population)):
                 try:
-                    stagnation_count = 0
-
                     self.current_net = neat.nn.FeedForwardNetwork.create(genome, self.neat_config)
 
                     self.current_frame = self.env.reset()
@@ -187,12 +186,14 @@ class Mario:
 
             if prev_best_fitness is not None and prev_best_fitness == self.neat.best_genome.fitness:
                 stagnation_count += 1
+                print("HERE")
             else:
                 prev_best_fitness = self.neat.best_genome.fitness
 
             if stagnation_count == 2:
                 print("STAGNATION")
 
-            # save the current state
-            self.save()
+            if gen_bkup:
+                # save the current state
+                self.save()
 
