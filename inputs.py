@@ -141,6 +141,8 @@ def get_tile_index_of_player(tiles, player_pos, tile_width, tile_height):
     # bound the player position
     if p[0] < 0:
         p = (0, p[1])
+    if p[0] > 224:
+        p = (224, p[1])
     if p[1] < 0:
         p = (p[0], 0)
     if p[1] > 208:
@@ -154,6 +156,8 @@ def get_tile_index_of_player(tiles, player_pos, tile_width, tile_height):
         for j, col in enumerate(row):
             if p[0] > j * tile_width and p[0] <= (j + 1) * tile_width:
                 p_col = j
-    assert (p_col is not None and p_row is not None)
+    if p_col is None or p_row is None:
+        print("ERR: [get_tile_index_of_player] p_col and p_row must not be None! player_pos: {}".format(p))
+    #assert (p_col is not None and p_row is not None), "player_pos: {}".format(p)
 
     return (p_col, p_row)

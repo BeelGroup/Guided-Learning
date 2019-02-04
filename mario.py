@@ -14,7 +14,7 @@ from human_input import humanInput
 class Mario:
     def __init__(self, retro_env, neat_config_file, verbosity=0):
 
-        #human_input = humanInput(retro_env)
+        human_input = humanInput(retro_env)
 
 
         # Load configuration.
