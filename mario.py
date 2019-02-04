@@ -130,7 +130,7 @@ class Mario:
                         frame_delay_start_time = get_epochtime_ms()
 
                         # Evaluate the current genome
-                        if t % 10 == 0:
+                        if t % 10 == 0 or frame_delay != 0:
                             if self.verbosity > 1:
                                 infostr = ''
                                 if self.current_info:
