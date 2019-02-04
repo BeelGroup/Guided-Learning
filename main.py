@@ -16,6 +16,7 @@ parser.add_argument('--verbose', '-v', action='count', default=1, help='increase
 parser.add_argument('--quiet', '-q', action='count', default=0, help='decrease verbosity (can be specified multiple times)')
 parser.add_argument('--players', '-p', type=int, default=1, help='number of players/agents (default: 1)')
 parser.add_argument('--load', '-l', default='', help='the mario state filename to load')
+parser.add_argument('--limit', '-f', type=int, default=-1, help='limit the framerate (default -1 [no limit])')
 args = parser.parse_args()
 
 
@@ -31,7 +32,7 @@ def main(config_file):
     else:
         mario = Mario(env, config_file)
 
-    mario.run()
+    mario.run(int(args.limit))
 
 
 if __name__ == "__main__":

@@ -1,4 +1,38 @@
 from utils import *
+from matplotlib import pyplot as plt
+
+
+def get_screen_inputs(frame, info, mario_config, debug=False):
+    if mario_config['NEAT'].getboolean('inputs_greyscale'):
+        frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114])
+        frame.resize((frame.shape[0], frame.shape[1], 1))
+
+    tiles = get_tiles(frame, 16, 16, info['xscrollLo'], player_pos=get_raw_player_pos(info),
+                      radius=int(mario_config['NEAT']['inputs_radius']))
+
+    # Get an array of average values per tile (this may have 3 values for RGB or 1 for greyscale)
+    tile_avg = np.mean(tiles, axis=3, dtype=np.uint16)  # average across tile row
+    tile_avg = np.mean(tile_avg, axis=2, dtype=np.uint16)  # average across tile col
+
+    if mario_config['NEAT'].getboolean('inputs_greyscale'):
+        # the greyscale value is in all 3 positions so just get the first
+        tile_inputs = tile_avg[:, :, 0:1].flatten().tolist()
+    else:
+        tile_inputs = tile_avg[:, :, :].flatten().tolist()
+
+    if debug:
+        print("[get_screen_inputs] Displaying tile inputs:")
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        major_ticks = np.arange(0, 256, 16)
+        ax.set_xticks(major_ticks)
+        ax.set_yticks(major_ticks)
+        ax.imshow(stitch_tiles(tiles, 16, 16))
+        plt.grid(True)
+        plt.show()
+
+    # normalize the tile_inputs array
+    return normalize_list(tile_inputs, 0, 1)
 
 
 def get_tiles(frame, tile_width, tile_height, x_scroll_lo, player_pos=None, radius=None, display_tiles=False):

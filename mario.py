@@ -1,11 +1,8 @@
-import configparser
+import configparser, datetime, time
 import retro
 import neat
 from neat.six_util import iteritems
 import numpy as np
-import pickle
-
-from matplotlib import pyplot as plt
 
 import visualize
 from inputs import *
@@ -24,7 +21,7 @@ class Mario:
         self.neat_config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                              neat.DefaultSpeciesSet, neat.DefaultStagnation, neat_config_file)
 
-        '''
+        ''' 
         # TODO: Allow dynamic input length based on config['NEAT'].getboolean('inputs_greyscale')
         # set the number of genome inputs dynamically based on RGB/Greyscale
         self.num_inputs = (16*16*(int(self.config['NEAT']['inputs_radius']) ** 2)) + 25 + 4
@@ -37,6 +34,7 @@ class Mario:
         self.verbosity = verbosity
         self.timeout = int(self.config['NEAT']['timeout'])
         self.current_frame = self.env.reset()
+        self.current_player_pos = None
         self.joystick_inputs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]).astype(np.uint8)
         self.current_net = None
         self.current_info = None
@@ -68,75 +66,54 @@ class Mario:
         self.env = env
 
 
+    def train_human_input(self):
+        # TODO
+        human_input = get_human_input(self.env)
+        pass
+
+
     def get_neat_inputs(self):
         '''Uses the given frame to compute an output for each 16x16 block of pixels.
             Extracts player position and enemy positions (-1 if unavailable) from info.
                 Returns: A list of inputs to be fed to the NEAT network '''
-        frame = self.current_frame
-        info = self.current_info
 
         # player_pos_x, player_pos_y, enemy_n_pos_x, enemy_n_pos_y, tile_input
         inputs = []
 
-        # raw positions are given in (y,x with origin at the bottom right)
-        player_pos = get_raw_player_pos(info)
-
         # normalize
-        inputs.append(player_pos[0] / frame.shape[0])
-        inputs.append(player_pos[1] / frame.shape[1])
+        inputs.append(self.current_player_pos[0] / self.current_frame.shape[0])
+        inputs.append(self.current_player_pos[1] / self.current_frame.shape[1])
 
-        enemy_pos = get_raw_enemy_pos(info)
+        enemy_pos = get_raw_enemy_pos(self.current_info)
         for enemy in enemy_pos:
             if enemy != (-1, -1):
                 # normalize
-                inputs.append(enemy[0] / frame.shape[0])
-                inputs.append(enemy[1] / frame.shape[1])
+                inputs.append(enemy[0] / self.current_frame.shape[0])
+                inputs.append(enemy[1] / self.current_frame.shape[1])
             else:
                 inputs.append(enemy[0])
                 inputs.append(enemy[1])
 
-        if self.config['NEAT'].getboolean('inputs_greyscale'):
-            frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114])
-            frame.resize((frame.shape[0], frame.shape[1], 1))
-
-        tiles = get_tiles(frame, 16, 16, info['xscrollLo'], player_pos=player_pos, radius=int(self.config['NEAT']['inputs_radius']))
-
-        # Get an array of average values per tile (this may have 3 values for RGB or 1 for greyscale)
-        tile_avg = np.mean(tiles, axis=3, dtype=np.uint16) # average across tile row
-        tile_avg = np.mean(tile_avg, axis=2, dtype=np.uint16)  # average across tile col
-
-        if self.config['NEAT'].getboolean('inputs_greyscale'):
-            # the greyscale value is in all 3 positions so just get the first
-            tile_inputs = tile_avg[:, :, 0:1].flatten().tolist()
-        else:
-            tile_inputs = tile_avg[:, :, :].flatten().tolist()
-
-        # normalize the tile_inputs array
-        norm_tile_inputs = normalize_list(tile_inputs, 0, 1)
-
-        inputs = inputs + norm_tile_inputs
+        inputs = inputs + get_screen_inputs(self.current_frame, self.current_info, self.config, debug=self.debug_graphs)
 
         if self.debug:
-            print("[get_neat_inputs] Raw Player Pos: {}".format(player_pos))
+            print("[get_neat_inputs] Raw Player Pos: {}".format(self.current_player_pos))
             print("[get_neat_inputs] Raw Enemy Pos: {}".format(enemy_pos))
-            if self.debug_graphs:
-                print("[get_neat_inputs] Displaying tile inputs:")
-                fig = plt.figure()
-                ax = fig.add_subplot(1, 1, 1)
-                major_ticks = np.arange(0, 256, 16)
-                ax.set_xticks(major_ticks)
-                ax.set_yticks(major_ticks)
-                ax.imshow(stitch_tiles(tiles, 16, 16))
-                plt.grid(True)
-                plt.show()
+
         return inputs
 
 
-    def run(self):
+    def run(self, framerate_limit):
         ''' The main loop '''
+        frame_delay = 1000/framerate_limit if framerate_limit != -1 else 0
+
         while True:
+
+            prev_best_fitness = None
             for genome_id, genome in list(iteritems(self.neat.population)):
                 try:
+                    stagnation_count = 0
+
                     self.current_net = neat.nn.FeedForwardNetwork.create(genome, self.neat_config)
 
                     self.current_frame = self.env.reset()
@@ -145,7 +122,13 @@ class Mario:
                     totrew = [0] * 1
                     self.timeout = int(self.config['NEAT']['timeout'])
 
+                    frame_delay_start_time = get_epochtime_ms()
                     while True:
+                        # limit loop based on frame_delay
+                        while(get_epochtime_ms() < frame_delay_start_time + frame_delay):
+                            pass
+                        frame_delay_start_time = get_epochtime_ms()
+
                         # Evaluate the current genome
                         if t % 10 == 0:
                             if self.verbosity > 1:
@@ -155,6 +138,9 @@ class Mario:
                                 print(('t=%i' % t) + infostr)
 
                             if self.current_info is not None:
+                                # raw positions are given in (y,x with origin at the bottom right)
+                                self.current_player_pos = get_raw_player_pos(self.current_info)
+
                                 inputs = self.get_neat_inputs()
                                 raw_joystick_inputs = self.current_net.activate(inputs)
                                 # pad None into second position
@@ -162,13 +148,13 @@ class Mario:
                                 # round to 0 or 1
                                 self.joystick_inputs = np.asarray([round(x) for x in self.joystick_inputs], dtype=np.uint8)
 
-                                self.env.render()
+                            self.env.render()
 
                         self.current_frame, rew, done, self.current_info = self.env.step(self.joystick_inputs)
+                        rew = [rew]
 
                         t += 1
 
-                        rew = [rew]
                         for i, r in enumerate(rew):
                             totrew[i] += r
                             if r > 0:
@@ -198,6 +184,15 @@ class Mario:
             visualize.draw_net(self.neat_config, self.neat.best_genome, view=False, filename="img/gen_{}_genome".format(
                 self.neat.generation - 1))
             visualize.plot_stats(self.neat_stats)
+
+            if prev_best_fitness is not None and prev_best_fitness == self.neat.best_genome.fitness:
+                stagnation_count += 1
+            else:
+                prev_best_fitness = self.neat.best_genome.fitness
+
+            if stagnation_count == 2:
+                print("STAGNATION")
+
             # save the current state
             self.save()
 

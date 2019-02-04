@@ -1,4 +1,4 @@
-import sys, pickle
+import sys, pickle, datetime
 import numpy as np
 
 
@@ -10,6 +10,10 @@ def save_state(obj, save_state_filename):
 def load_state(save_state_filename):
     filehandler = open(save_state_filename, 'rb')
     return pickle.load(filehandler)
+
+
+def get_epochtime_ms():
+    return round(datetime.datetime.utcnow().timestamp() * 1000)
 
 
 def stitch_tiles(tiles, tile_width, tile_height):

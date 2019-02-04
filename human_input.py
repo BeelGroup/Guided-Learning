@@ -9,9 +9,11 @@ from pyglet.window import key as keycodes
 from pyglet.gl import *
 
 
-
 def get_human_input(env):
-    env = env
+    '''
+    :param env: The Retro environment
+    :return: A list of tuples (obs, action, info)
+    '''
 
     save_period = 10  # frames
 
@@ -99,7 +101,7 @@ def get_human_input(env):
         obs, rew, done, info = env.step(action)
 
         if steps % save_period == 0:
-            recorded_io.append((obs, action))
+            recorded_io.append((obs, action, info))
 
         steps += 1
 
