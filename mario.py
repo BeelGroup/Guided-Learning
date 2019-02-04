@@ -196,4 +196,6 @@ class Mario:
             if gen_bkup:
                 # save the current state
                 self.save()
+            else:
+                print("Backups are disabled.")
 
