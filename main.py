@@ -24,8 +24,10 @@ def main(config_file):
                      players=args.players)
 
     if args.load != '':
+        print("Loading previous Mario state..")
         mario = load_state("saves/"+args.load)
         mario.set_env(env)
+        print("Loaded.")
     else:
         mario = Mario(env, config_file)
 

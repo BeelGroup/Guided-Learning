@@ -1,56 +1,4 @@
-
 from utils import *
-
-
-import pyglet
-
-def get_keyboard_input(obs, win):
-    key_handler = pyglet.window.key.KeyStateHandler()
-
-    joysticks = pyglet.input.get_joysticks()
-    if len(joysticks) > 0:
-        joystick = joysticks[0]
-        joystick.open()
-    else:
-        joystick = None
-
-    win.push_handlers(key_handler)
-
-    key_previous_states = {}
-    button_previous_states = {}
-
-    pyglet.app.platform_event_loop.start()
-
-    while True:
-        win.dispatch_events()
-
-        win.clear()
-
-        keys_clicked = set()
-        keys_pressed = set()
-
-        for key_code, pressed in key_handler.items():
-            if pressed:
-                keys_pressed.add(key_code)
-
-            if not key_previous_states.get(key_code, False) and pressed:
-                keys_clicked.add(key_code)
-            key_previous_states[key_code] = pressed
-
-        buttons_clicked = set()
-        buttons_pressed = set()
-        if joystick is not None:
-            for button_code, pressed in enumerate(joystick.buttons):
-                if pressed:
-                    buttons_pressed.add(button_code)
-
-                if not button_previous_states.get(button_code, False) and pressed:
-                    buttons_clicked.add(button_code)
-                button_previous_states[button_code] = pressed
-
-        print(keys_pressed)
-
-    sys.exit(0)
 
 
 def get_tiles(frame, tile_width, tile_height, x_scroll_lo, player_pos=None, radius=None, display_tiles=False):
@@ -158,6 +106,5 @@ def get_tile_index_of_player(tiles, player_pos, tile_width, tile_height):
                 p_col = j
     if p_col is None or p_row is None:
         print("ERR: [get_tile_index_of_player] p_col and p_row must not be None! player_pos: {}".format(p))
-    #assert (p_col is not None and p_row is not None), "player_pos: {}".format(p)
 
     return (p_col, p_row)

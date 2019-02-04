@@ -9,13 +9,12 @@ from matplotlib import pyplot as plt
 
 import visualize
 from inputs import *
-from human_input import humanInput
+from human_input import get_human_input
 
 class Mario:
     def __init__(self, retro_env, neat_config_file, verbosity=0):
 
-        human_input = humanInput(retro_env)
-
+        print(get_human_input(retro_env))
 
         # Load configuration.
         self.config = configparser.ConfigParser()
