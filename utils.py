@@ -3,11 +3,13 @@ import numpy as np
 
 
 def save_state(obj, save_state_filename):
+    # TODO: Use gzip
     filehandler = open(save_state_filename, 'wb')
     pickle.dump(obj, filehandler)
 
 
 def load_state(save_state_filename):
+    # TODO: Use gzip
     filehandler = open(save_state_filename, 'rb')
     return pickle.load(filehandler)
 

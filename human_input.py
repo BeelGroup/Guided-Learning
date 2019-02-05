@@ -12,7 +12,7 @@ from pyglet.gl import *
 def get_human_input(env):
     '''
     :param env: The Retro environment
-    :return: A list of tuples (obs, action, info)
+    :return: A list of tuples (obs, info, action)
     '''
 
     save_period = 10  # frames
@@ -101,7 +101,7 @@ def get_human_input(env):
         obs, rew, done, info = env.step(action)
 
         if steps % save_period == 0:
-            recorded_io.append((obs, action, info))
+            recorded_io.append((obs, info, action))
 
         steps += 1
 

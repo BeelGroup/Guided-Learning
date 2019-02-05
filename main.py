@@ -17,7 +17,7 @@ parser.add_argument('--quiet', '-q', action='count', default=0, help='decrease v
 parser.add_argument('--players', '-p', type=int, default=1, help='number of players/agents (default: 1)')
 parser.add_argument('--load', '-l', default='', help='the mario state filename to load')
 parser.add_argument('--limit', '-f', type=int, default=-1, help='limit the fps (default -1 [no limit])')
-parser.add_argument('--disable_gen_backup', '-d', default=False, action='store_true')
+parser.add_argument('--disable_gen_stats', '-d', default=False, action='store_true', help='disable statistics and backup')
 args = parser.parse_args()
 
 
@@ -33,7 +33,7 @@ def main(config_file):
     else:
         mario = Mario(env, config_file)
 
-    mario.run(int(args.limit), gen_bkup=not args.disable_gen_backup)
+    mario.run(fps=int(args.limit), gen_stats=not args.disable_gen_stats)
 
 
 if __name__ == "__main__":

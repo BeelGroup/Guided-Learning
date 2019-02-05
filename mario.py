@@ -7,6 +7,7 @@ import numpy as np
 import visualize
 from inputs import *
 from human_input import get_human_input
+from keras_example import train
 
 class Mario:
     def __init__(self, retro_env, neat_config_file, verbosity=0):
@@ -38,6 +39,10 @@ class Mario:
         self.joystick_inputs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]).astype(np.uint8)
         self.current_net = None
         self.current_info = None
+        self.frame_delay = None
+        self.current_best_genome = None
+        self.start_state = self.env.initial_state
+        self.human_start_state = None
 
         self.debug = self.config['DEFAULT'].getboolean('debug')
         self.debug_graphs = self.config['DEFAULT'].getboolean('debug_graphs')
@@ -66,10 +71,29 @@ class Mario:
         self.env = env
 
 
-    def train_human_input(self):
+    def ask_for_help(self):
         # TODO
-        human_input = get_human_input(self.env)
-        pass
+        print("STAGNATION - Asking for help..")
+        # take input here to verify help
+
+        # play the best genome up to just before it dies
+        self.run_genome(self.current_best_genome, fps=30, human_intervention=True)
+        # self.human_start_state should now be set
+        self.env.initial_state = self.human_start_state
+
+        # Take the human input
+        human_io = get_human_input(self.env)
+
+        # TODO: train a new network
+        inputs = np.asarray([get_screen_inputs(h_io[0], h_io[1], self.config) for h_io in human_io])
+        expected_outputs = np.asarray([h_io[2] for h_io in human_io])
+        model = train(inputs, expected_outputs)
+
+        print("running model..")
+
+
+        # reset the start state
+        self.env.initial_state = self.start_state
 
 
     def get_neat_inputs(self):
@@ -103,99 +127,122 @@ class Mario:
         return inputs
 
 
-    def run(self, framerate_limit, gen_bkup=True):
+    def evaluate_genome(self, genome, fps=-1, human_intervention=False):
+        '''
+        :param genome: The genome to evaluate
+        :param fps: Limits to the given fps
+        :param human_intervention: Signals that human is giving help, if true then genome.fitness should have a value
+        :return: None
+        '''
+
+        self.frame_delay = 1000 / fps if fps != -1 else 0
+
+        try:
+            self.current_net = neat.nn.FeedForwardNetwork.create(genome, self.neat_config)
+
+            self.current_frame = self.env.reset()
+
+            t = 0
+            totrew = [0] * 1
+            self.timeout = int(self.config['NEAT']['timeout'])
+
+            frame_delay_start_time = get_epochtime_ms()
+            while True:
+
+                if fps != -1:
+                    # limit loop based on frame_delay
+                    while (get_epochtime_ms() < frame_delay_start_time + self.frame_delay):
+                        pass
+                    frame_delay_start_time = get_epochtime_ms()
+
+                # Evaluate the current genome
+                if t % 10 == 0 or self.frame_delay != 0:
+                    if self.verbosity > 1:
+                        infostr = ''
+                        if self.current_info:
+                            infostr = ', info: ' + ', '.join(['%s=%i' % (k, v) for k, v in self.current_info.items()])
+                        print(('t=%i' % t) + infostr)
+
+                    if self.current_info is not None:
+                        # raw positions are given in (y,x with origin at the bottom right)
+                        self.current_player_pos = get_raw_player_pos(self.current_info)
+
+                        inputs = self.get_neat_inputs()
+                        raw_joystick_inputs = self.current_net.activate(inputs)
+                        # pad None into second position
+                        self.joystick_inputs = raw_joystick_inputs[:1] + [0] + raw_joystick_inputs[1:]
+                        # round to 0 or 1
+                        self.joystick_inputs = np.asarray([round(x) for x in self.joystick_inputs], dtype=np.uint8)
+
+                    self.env.render()
+
+                self.current_frame, rew, done, self.current_info = self.env.step(self.joystick_inputs)
+                rew = [rew]
+
+                t += 1
+
+                for i, r in enumerate(rew):
+                    totrew[i] += r
+                    if r > 0:
+                        self.timeout = int(self.config['NEAT']['timeout'])
+                    else:
+                        self.timeout -= 1
+                        if self.timeout < 0:
+                            done = True
+                    if self.verbosity > 1:
+                        if r > 0:
+                            print('t=%i p=%i got reward: %g, current reward: %g' % (t, i, r, totrew[i]))
+                        if r < 0:
+                            print('t=%i p=%i got penalty: %g, current reward: %g' % (t, i, r, totrew[i]))
+
+                if human_intervention:
+                    # we are playing the best genome up to just before the stagnation point
+                    if totrew[0] > (genome.fitness/100)-250:
+                        self.human_start_state = self.env.em.get_state()
+                        return
+
+                if done:
+                    self.env.render()
+                    print("GenomeId:%s time:%i fitness:%d" % (genome.key, t, totrew[0]))
+                    genome.fitness = totrew[0]
+                    break
+
+        except KeyboardInterrupt:
+            exit(0)
+
+
+    def run(self, fps=-1, gen_stats=True):
         ''' The main loop '''
-        frame_delay = 1000/framerate_limit if framerate_limit != -1 else 0
+
+        prev_best_fitness = None
+        stagnation_count = 0
 
         while True:
-
-            prev_best_fitness = None
-            stagnation_count = 0
             for genome_id, genome in list(iteritems(self.neat.population)):
-                try:
-                    self.current_net = neat.nn.FeedForwardNetwork.create(genome, self.neat_config)
-
-                    self.current_frame = self.env.reset()
-
-                    t = 0
-                    totrew = [0] * 1
-                    self.timeout = int(self.config['NEAT']['timeout'])
-
-                    frame_delay_start_time = get_epochtime_ms()
-                    while True:
-                        # limit loop based on frame_delay
-                        while(get_epochtime_ms() < frame_delay_start_time + frame_delay):
-                            pass
-                        frame_delay_start_time = get_epochtime_ms()
-
-                        # Evaluate the current genome
-                        if t % 10 == 0 or frame_delay != 0:
-                            if self.verbosity > 1:
-                                infostr = ''
-                                if self.current_info:
-                                    infostr = ', info: ' + ', '.join(['%s=%i' % (k, v) for k, v in self.current_info.items()])
-                                print(('t=%i' % t) + infostr)
-
-                            if self.current_info is not None:
-                                # raw positions are given in (y,x with origin at the bottom right)
-                                self.current_player_pos = get_raw_player_pos(self.current_info)
-
-                                inputs = self.get_neat_inputs()
-                                raw_joystick_inputs = self.current_net.activate(inputs)
-                                # pad None into second position
-                                self.joystick_inputs = raw_joystick_inputs[:1] + [0] + raw_joystick_inputs[1:]
-                                # round to 0 or 1
-                                self.joystick_inputs = np.asarray([round(x) for x in self.joystick_inputs], dtype=np.uint8)
-
-                            self.env.render()
-
-                        self.current_frame, rew, done, self.current_info = self.env.step(self.joystick_inputs)
-                        rew = [rew]
-
-                        t += 1
-
-                        for i, r in enumerate(rew):
-                            totrew[i] += r
-                            if r > 0:
-                                self.timeout = int(self.config['NEAT']['timeout'])
-                            else:
-                                self.timeout -= 1
-                                if self.timeout < 0:
-                                    done = True
-                            if self.verbosity > 1:
-                                if r > 0:
-                                    print('t=%i p=%i got reward: %g, current reward: %g' % (t, i, r, totrew[i]))
-                                if r < 0:
-                                    print('t=%i p=%i got penalty: %g, current reward: %g' % (t, i, r, totrew[i]))
-                        if done:
-                            self.env.render()
-                            print("GenomeId:%s time:%i fitness:%d" % (genome_id, t, totrew[0]))
-                            genome.fitness = totrew[0]
-                            break
-
-                except KeyboardInterrupt:
-                    exit(0)
+                self.evaluate_genome(genome, fps=fps)
 
             # All genomes in the current population have been evaluated, get the best genome and move to the next generation
             self.neat.next_generation()
+            self.current_best_genome = self.neat.best_genome
             print("Best of gen: {} -- Fitness: {!s} -- Shape: {}".format(self.neat.generation-1, self.neat.best_genome.fitness, self.neat.best_genome.size()))
-            # visualise the champion
-            visualize.draw_net(self.neat_config, self.neat.best_genome, view=False, filename="img/gen_{}_genome".format(
-                self.neat.generation - 1))
-            visualize.plot_stats(self.neat_stats)
 
             if prev_best_fitness is not None and prev_best_fitness == self.neat.best_genome.fitness:
                 stagnation_count += 1
-                print("HERE")
             else:
                 prev_best_fitness = self.neat.best_genome.fitness
 
-            if stagnation_count == 2:
-                print("STAGNATION")
+            if stagnation_count > 1:
+                stagnation_count = 0
+                self.ask_for_help()
 
-            if gen_bkup:
+            if gen_stats:
+                # visualise the champion
+                visualize.draw_net(self.neat_config, self.neat.best_genome, view=False,
+                                   filename="img/gen_{}_genome".format(
+                                       self.neat.generation - 1))
+                visualize.plot_stats(self.neat_stats)
                 # save the current state
                 self.save()
             else:
-                print("Backups are disabled.")
+                print("Statistics and backup are disabled.")
 
