@@ -2,7 +2,39 @@ from utils import *
 from matplotlib import pyplot as plt
 
 
-def get_screen_inputs(frame, info, mario_config, debug=False):
+def get_network_inputs(frame, info, mario_config):
+    '''Uses the given frame to compute an output for each 16x16 block of pixels.
+        Extracts player position and enemy positions (-1 if unavailable) from info.
+            Returns: A list of inputs to be fed to the NEAT network '''
+
+    # player_pos_x, player_pos_y, enemy_n_pos_x, enemy_n_pos_y, tile_input
+    inputs = []
+    inputs = inputs + get_positional_inputs(frame, info)
+    inputs = inputs + get_screen_inputs(frame, info, mario_config)
+
+    return np.asarray(inputs)
+
+
+def get_positional_inputs(frame, info):
+    ret = []
+    # normalize
+    player_pos = get_raw_player_pos(info)
+    ret.append(player_pos[0] / frame.shape[0])
+    ret.append(player_pos[1] / frame.shape[1])
+
+    enemy_pos = get_raw_enemy_pos(info)
+    for enemy in enemy_pos:
+        if enemy != (-1, -1):
+            # normalize
+            ret.append(enemy[0] / frame.shape[0])
+            ret.append(enemy[1] / frame.shape[1])
+        else:
+            ret.append(-1)
+            ret.append(-1)
+    return ret
+
+
+def get_screen_inputs(frame, info, mario_config):
     if mario_config['NEAT'].getboolean('inputs_greyscale'):
         frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114])
         frame.resize((frame.shape[0], frame.shape[1], 1))
@@ -20,7 +52,7 @@ def get_screen_inputs(frame, info, mario_config, debug=False):
     else:
         tile_inputs = tile_avg[:, :, :].flatten().tolist()
 
-    if debug:
+    if mario_config['DEFAULT'].getboolean('debug_graphs'):
         print("[get_screen_inputs] Displaying tile inputs:")
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)

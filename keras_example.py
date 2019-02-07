@@ -3,7 +3,7 @@ from keras.layers import Dense
 from keras.optimizers import SGD
 from keras.callbacks import TensorBoard
 
-epochs = 10000
+epochs = 5000
 
 def train(inputs, expected_outputs):
 
@@ -27,7 +27,13 @@ def train(inputs, expected_outputs):
               verbose=1,
               callbacks=[tbCallBack])
 
-    print(model.predict(inputs, verbose=1))
+    print("[keras_example] inputs: {}".format(inputs))
+    print("[keras_example] inputs.shape: {}".format(inputs.shape))
+    print("[keras_example] expected_outputs: {}".format(expected_outputs))
+    predictions = model.predict(inputs, verbose=1)
+    for i, p in enumerate(predictions):
+        print(p)
+        print(expected_outputs[i])
     score = model.evaluate(inputs, expected_outputs, verbose=0)
     print('Test loss:', score[0])
     print('Test accuracy:', score[1])

@@ -12,7 +12,7 @@ from pyglet.gl import *
 def get_human_input(env):
     '''
     :param env: The Retro environment
-    :return: A list of tuples (obs, info, action)
+    :return: A list of tuples: (obs, info, action)
     '''
 
     save_period = 10  # frames
@@ -62,6 +62,7 @@ def get_human_input(env):
 
     steps = 0
     recorded_io = []
+    first_key = True
     while True:
         win.dispatch_events()
 
@@ -69,12 +70,14 @@ def get_human_input(env):
 
         keys_clicked = set()
         keys_pressed = set()
+        key_clicked = False
         for key_code, pressed in key_handler.items():
             if pressed:
                 keys_pressed.add(key_code)
 
             if not key_previous_states.get(key_code, False) and pressed:
                 keys_clicked.add(key_code)
+                key_clicked = True
             key_previous_states[key_code] = pressed
 
         if (keycodes.S in keys_clicked):
@@ -100,8 +103,14 @@ def get_human_input(env):
         action = np.array([int(inputs[key]) for key in inputs]).astype(np.uint8)
         obs, rew, done, info = env.step(action)
 
-        if steps % save_period == 0:
-            recorded_io.append((obs, info, action))
+        if key_clicked:
+            if not first_key:
+                # record on every key change. Gives very few samples but this is fine because we want to overfit
+                recorded_io.append((obs, info, action))
+            if first_key:
+                first_key = False
+
+        #if steps % save_period == 0 or key_clicked):
 
         steps += 1
 

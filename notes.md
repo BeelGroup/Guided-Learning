@@ -58,3 +58,13 @@ Currently normalizing pixel tile data between [0,1]
 Normalizing player and enemy positions by dividing by screen size (%)
 
 When enemies are not drawn then enemy position is (-1,-1)
+
+
+### Taught Memories / Taught Response Networks (TRNs)
+Initially I can use 'single action' taught memories. These comprise of a input sample and a corresponding model that has been trained for the response to the input sample.
+These 'single action' taught memories can be triggered by simply getting the vector difference of the current input and 'single action' taught memory input. If the result is within a certain threshold then we can trigger the taught response network.
+
+The issue with this is that many inputs are time series dependant (i.e. how high Mario jumps depends on how long the 'jump' button is held). A temporary solution would be to compare just the first frame of the TRN and if a match is found then trigger the TRN up to its last frame.
+
+
+
