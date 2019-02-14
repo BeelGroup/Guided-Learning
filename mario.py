@@ -156,6 +156,8 @@ class Mario:
             totrew = [0] * 1
             self.timeout = int(self.config['NEAT']['timeout'])
 
+            using_TRM = False
+
             frame_delay_start_time = get_epochtime_ms()
             while True:
 
@@ -170,9 +172,13 @@ class Mario:
                     tr = self.get_taught_response()
                     if tr is not None:
                         joystick_inputs = tr
+                        using_TRM = True
                         t = 1
 
-                if t % 10 == 0 or self.frame_delay != 0:
+                if using_TRM and t % 10 == 0:
+                    using_TRM = False
+                    
+                if (t % 10 == 0 or self.frame_delay != 0) and not using_TRM:
                     if self.current_info:
                         inputs = get_network_inputs(self.current_frame, self.current_info, self.config)
                         raw_joystick_inputs = self.current_net.activate(inputs)
@@ -209,7 +215,6 @@ class Mario:
                         break
 
                 if done:
-                    self.env.render()
                     print("GenomeId:%s time:%i fitness:%d" % (genome.key, t, totrew[0]))
                     genome.fitness = totrew[0]
                     break
