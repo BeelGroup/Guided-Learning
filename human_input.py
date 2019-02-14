@@ -8,6 +8,8 @@ from pyglet import clock
 from pyglet.window import key as keycodes
 from pyglet.gl import *
 
+from utils import *
+
 
 def get_human_input(env):
     '''
@@ -62,7 +64,11 @@ def get_human_input(env):
 
     steps = 0
     recorded_io = []
+
+    started = False
     first_key = True
+    timer_start = get_epochtime_ms()
+    print("Waiting for input..")
     while True:
         win.dispatch_events()
 
@@ -80,12 +86,20 @@ def get_human_input(env):
                 key_clicked = True
             key_previous_states[key_code] = pressed
 
+        if key_clicked and not started:
+            print("Starting..")
+            started = True
+
         if (keycodes.S in keys_clicked):
             print("Finished Recording")
             break
 
-        inputs = {
-            'B': keycodes.X in keys_pressed,
+        if not started:
+            if get_epochtime_ms() - timer_start > 3 * 1000:
+                break
+        else:
+            inputs = {
+                'B': keycodes.X in keys_pressed,
 
             'None': False,
 
@@ -98,21 +112,21 @@ def get_human_input(env):
             'RIGHT': keycodes.RIGHT in keys_pressed,
 
             'A': keycodes.Z in keys_pressed,
-        }
+            }
 
-        action = np.array([int(inputs[key]) for key in inputs]).astype(np.uint8)
-        obs, rew, done, info = env.step(action)
+            action = np.array([int(inputs[key]) for key in inputs]).astype(np.uint8)
+            obs, rew, done, info = env.step(action)
 
-        if key_clicked:
-            if not first_key:
-                # record on every key change. Gives very few samples but this is fine because we want to overfit
-                recorded_io.append((obs, info, action))
-            if first_key:
-                first_key = False
+            if key_clicked:
+                if not first_key:
+                    # record on every key change. Gives very few samples but this is fine because we want to overfit
+                    recorded_io.append((obs, info, action))
+                if first_key:
+                    first_key = False
 
-        #if steps % save_period == 0 or key_clicked):
+            #if steps % save_period == 0 or key_clicked):
 
-        steps += 1
+            steps += 1
 
         # Draw the game to the window
         glBindTexture(GL_TEXTURE_2D, texture_id)

@@ -11,18 +11,18 @@ import neat, visualize
 
 import h5py, json
 
-import sys
+import sys, random
 
 epochs = 5000
 
-def train(inputs, expected_outputs):
-    print("[train] shape of inputs: {}".format(inputs.shape))
-    print("[train] shape of outputs: {}".format(expected_outputs.shape))
+def train_single_shot(inputs, expected_outputs):
+    # Train on the first sample given
+    assert(inputs.shape[0]==1 and expected_outputs.shape[0]==1, "")
 
     model = Sequential()
-    #model.add(Dense(25, activation='sigmoid')) # single hidden layer
-    model.add(Dense(3, activation='sigmoid'))
-    model.add(Dense(3, activation='sigmoid'))
+    model.add(Dense(15, activation='sigmoid')) # single hidden layer
+    #model.add(Dense(3, activation='sigmoid'))
+    #model.add(Dense(3, activation='sigmoid'))
     model.add(Dense(expected_outputs.shape[-1], activation='sigmoid')) # output layer
 
     # 25 is best so far @ 5000 epochs (2.1854e-04 loss)
@@ -40,20 +40,20 @@ def train(inputs, expected_outputs):
 
     model.summary()
 
-    print("[keras_example] inputs: {}".format(inputs))
-    print("[keras_example] inputs.shape: {}".format(inputs.shape))
-    print("[keras_example] expected_outputs: {}".format(expected_outputs))
+    print("[train_single_shot] inputs: {}".format(inputs))
+    print("[train_single_shot] inputs.shape: {}".format(inputs.shape))
+    print("[train_single_shot] expected_outputs: {}".format(expected_outputs))
     predictions = model.predict(inputs, verbose=1)
     for i, p in enumerate(predictions):
         print(p)
         print(expected_outputs[i])
     score = model.evaluate(inputs, expected_outputs, verbose=0)
-    print('Test loss:', score[0])
-    print('Test accuracy:', score[1])
+    print('[train_single_shot] Test loss:', score[0])
+    print('[train_single_shot] Test accuracy:', score[1])
 
-    print("Saving model..")
+    print("[train_single_shot] Saving model..")
     save_model(model)
-    print("Saved model to disk")
+    print("[train_single_shot] Saved model to disk")
 
     return model
 
@@ -91,13 +91,15 @@ def load_keras2neat_model_data(hdf5_weight_path):
     return ret
 
 
-def keras2neat(neat_config):
-    print("Loading model data..")
-    model_data = load_keras2neat_model_data('model.h5')
-    print("Loaded.")
+def keras2neat(neat_config, keras_h5_path, new_genome_key):
+    new_genome_key = str(new_genome_key)
 
-    # TODO: Establish what the key should be
-    new_genome = neat.DefaultGenome('NEW_KEY')
+    print("[keras2neat] Loading model data..")
+    model_data = load_keras2neat_model_data(keras_h5_path)
+    print("[keras2neat] Loaded.")
+
+    # Use a random key
+    new_genome = neat.DefaultGenome(new_genome_key)
 
     num_inputs = model_data[0]['kernel'].shape[0]
     num_outputs = model_data[-1]['kernel'].shape[1]
@@ -109,8 +111,6 @@ def keras2neat(neat_config):
     prev_layer_last_id = 0
     layer_last_id = 0
     complete = False
-
-    print("output bias: {}\n output kernel: {}".format(model_data[-1]["bias"], model_data[-1]['kernel']))
 
     # create the output nodes
     for o in range(num_outputs):
@@ -130,31 +130,26 @@ def keras2neat(neat_config):
             prev_layer_last_id = prev_layer_first_id + prev_layer_size
             layer_last_id = layer_first_node_id + layer_size
         for j in range(layer_size):
-            #print(layer['kernel'].shape)
             # each entry in ['bias'] represents a node in this layer
             # create a new node
             new_node = new_genome.create_node(neat_config.genome_config, new_node_id)
             # set the bias of the node
             setattr(new_node, 'bias', layer["bias"][j])
-
+            # add the node to the genome
             new_genome.nodes[new_node_id] = new_node
 
-            # add the connections to the previous layer
-            # NOTE: Assumes a fully connected network
+            # add the connections to the previous layer. NOTE: Assumes a fully connected network
             if layer_id == 0:
-                #print("Connecting the inputs..")
                 # connect to the inputs (ID is negative)
                 for k in range(-1, -num_inputs - 1, -1):
                     #print("connecting {} to {}".format(k, new_node_id))
                     new_genome.add_connection(neat_config.genome_config, k, new_node_id, layer["kernel"][k][j],
                                               True)
             elif layer_id == len(model_data) - 1:
-                print("Connecting the outputs..")
-
+                # connect the outputs
                 for p in range(prev_layer_size):
                     for o in range(num_outputs):
                         # connect the prev_layer to the output
-                        print("connecting {} to {}".format(p + prev_layer_first_id, o))
                         new_genome.add_connection(neat_config.genome_config, p + prev_layer_first_id, o,
                                                   layer['kernel'][p][o], True)
                 complete = True
@@ -163,12 +158,11 @@ def keras2neat(neat_config):
                 #print("Connecting hidden layer {}..".format(layer_id))
                 # connect to the previous layer
                 for k_i, k in enumerate(layer['kernel']):
-                    #print("connecting {} to {}".format(k_i + prev_layer_first_id, new_node_id))
                     new_genome.add_connection(neat_config.genome_config, k_i + prev_layer_first_id, new_node_id,
                                               k[j], True)
             new_node_id += 1
             prev_layer_size = layer_size
 
-    visualize.draw_net(neat_config, new_genome, view=False, filename="TEST")
+    visualize.draw_net(neat_config, new_genome, view=False, filename="human-intervention/img/keras2neat_"+new_genome_key)
 
-    return neat.nn.FeedForwardNetwork.create(new_genome, neat_config)
+    return new_genome

@@ -4,10 +4,12 @@ import neat
 from neat.six_util import iteritems
 import numpy as np
 
+from threading import Timer
+
 import visualize
 from inputs import *
 from human_input import get_human_input
-from keras_example import train, keras2neat
+from keras_example import train_single_shot, keras2neat
 
 class Mario:
     def __init__(self, retro_env, neat_config_file, verbosity=0):
@@ -70,38 +72,40 @@ class Mario:
         self.env = env
 
     def ask_for_help(self):
-        # TODO
-        print("STAGNATION - Asking for help..")
+        print("[ask_for_help] STAGNATION - Asking for help..")
+
         # take input here to verify help being given
 
         # play the best genome up to just before it dies
         self.evaluate_genome(self.current_best_genome, fps=30, human_intervention=True)
-        # self.human_start_state should now be set
+        # save the current state
+        self.human_start_state = self.env.em.get_state()
         self.env.initial_state = self.human_start_state
 
         # Take the human input
         human_io = get_human_input(self.env) # returns A list of tuples: (obs, info, action)
-        print("Number of human_io samples: {}".format(len(human_io)))
+        if len(human_io) == 0:
+            print("[ask_for_help] No input received. Continuing.")
+        else:
+            print("[ask_for_help] Number of human_io samples: {}".format(len(human_io)))
 
-        inputs = np.asarray([get_network_inputs(h_io[0], h_io[1], self.config) for h_io in human_io])
-        #expected_outputs = np.asarray([h_io[2] for h_io in human_io])
-        expected_outputs = np.asarray([np.append(h_io[2][:1], h_io[2][2:]) for h_io in human_io]) # removes the second position control
+            inputs = np.asarray([get_network_inputs(h_io[0], h_io[1], self.config) for h_io in human_io])
+            # remove the second position control
+            expected_outputs = np.asarray([np.append(h_io[2][:1], h_io[2][2:]) for h_io in human_io])
 
-        model = train(inputs, expected_outputs)
+            model = train_single_shot(inputs, expected_outputs)
 
-        neat_genome = keras2neat(self.neat_config)
+            neat_genome = keras2neat(self.neat_config, 'model.h5', new_genome_key=str(len(self.taught_responses)))
 
-        ## TEST
-        print("KERAS_MODEL_PREDICT: {}".format(model.predict(inputs)))
-        print("NEAT_GENOME_PREDICT: {}".format(neat_genome.activate(inputs[0])))
+            ## TEST
+            print("[ask_for_help] KERAS_MODEL_PREDICT: {}".format(model.predict(inputs)))
+            neat_genome_ff = neat.nn.FeedForwardNetwork.create(neat_genome, self.neat_config)
+            print("[ask_for_help] NEAT_GENOME_PREDICT: {}".format(neat_genome_ff.activate(inputs[0])))
 
-        sys.exit(0)
+            self.taught_responses.append((inputs, neat_genome))
 
-        assert(len(human_io)==1)
-        self.taught_responses.append((inputs, neat_genome))
-
-        # TODO: Evaluate the trained network
-        #print("running model..")
+            print("[ask_for_help] Evaluating the trained network..")
+            self.evaluate_genome(neat_genome, fps=30)
 
         # reset the start state
         self.env.initial_state = self.start_state
@@ -109,22 +113,23 @@ class Mario:
 
     def get_taught_response(self):
         if len(self.taught_responses) > 0:
-            inputs = np.asarray(get_network_inputs(self.current_frame, self.current_info, self.config))
-            for mem in self.taught_responses:
-                if abs(np.sum(inputs - mem[0])) < 0.02:
-                    print("Triggering TRN..")
-                    print("Diff: {}".format(abs(np.sum(inputs - mem[0]))))
-                    print("[evaluate_genome] inputs: {}".format(inputs))
-                    print("[evaluate_genome] inputs.shape: {}".format(inputs.shape))
-                    raw_joystick_inputs = mem.activate(inputs)
+            current_inputs = np.asarray(get_network_inputs(self.current_frame, self.current_info, self.config))
+            for mem_inputs, mem in self.taught_responses:
+                if abs(np.sum(current_inputs - mem_inputs)) < 0.02:
+                    print("[get_taught_response] Triggering TRN..")
+                    print("[get_taught_response] Diff: {}".format(abs(np.sum(current_inputs - mem_inputs))))
+                    print("[get_taught_response] inputs: {}".format(current_inputs))
+                    print("[get_taught_response] inputs.shape: {}".format(current_inputs.shape))
+                    mem_net = neat.nn.FeedForwardNetwork.create(mem, self.neat_config)
+                    raw_joystick_inputs = mem_net.activate(current_inputs)
 
-                    print("TRN output: {}".format(raw_joystick_inputs))
+                    print("[get_taught_response] TRN output: {}".format(raw_joystick_inputs))
                     # pad 0 into second position
                     joystick_inputs = raw_joystick_inputs[:1] + [0] + raw_joystick_inputs[1:]
                     # round outputs to 0 or 1
                     joystick_inputs = np.asarray([round(x) for x in joystick_inputs], dtype=np.uint8)
 
-                    print("TRN joystick_inputs: {}".format(joystick_inputs))
+                    print("[get_taught_response] TRN joystick_inputs: {}".format(joystick_inputs))
 
                     return joystick_inputs
         else:
@@ -161,6 +166,7 @@ class Mario:
                     frame_delay_start_time = get_epochtime_ms()
 
                 if self.current_info:
+                    # Search for taught response memories
                     tr = self.get_taught_response()
                     if tr is not None:
                         joystick_inputs = tr
@@ -200,8 +206,7 @@ class Mario:
                 if human_intervention:
                     # we are playing the best genome up to just before the stagnation point
                     if totrew[0] > genome.fitness-100:
-                        self.human_start_state = self.env.em.get_state()
-                        return
+                        break
 
                 if done:
                     self.env.render()
