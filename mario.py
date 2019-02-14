@@ -7,7 +7,7 @@ import numpy as np
 import visualize
 from inputs import *
 from human_input import get_human_input
-from keras_example import train
+from keras_example import train, load_keras2neat_model_data
 
 class Mario:
     def __init__(self, retro_env, neat_config_file, verbosity=0):
@@ -70,6 +70,97 @@ class Mario:
         self.env = env
 
 
+    def convert_human_intervention_model_to_neat(self, neat_config):
+        print("Loading model data..")
+        model_data = load_keras2neat_model_data('model.h5')
+        print("Loaded.")
+
+        # TODO: Establish what the key should be
+        new_genome = neat.DefaultGenome('NEW_KEY')
+
+        print(model_data[0]['kernel'].shape)
+        print(model_data[-1]['kernel'].shape)
+        num_inputs = model_data[0]['kernel'].shape[0]
+        num_outputs = model_data[-1]['kernel'].shape[1]
+        assert(num_inputs==61)
+        assert(num_outputs==8)
+
+        new_node_id = num_outputs
+        prev_layer_size = None
+        total_layer_size = 0
+        prev_layer_first_id = 0
+        prev_layer_last_id = 0
+        layer_last_id = 0
+        complete = False
+        for layer_id, layer in enumerate(model_data):
+            if complete:
+                break
+            layer_size = layer["bias"].shape[0]
+            layer_first_node_id = new_node_id
+            total_layer_size += layer_size
+
+            if layer_id != 0:
+                prev_layer_first_id = new_node_id - prev_layer_size
+                prev_layer_last_id = prev_layer_first_id + prev_layer_size
+                layer_last_id = layer_first_node_id + layer_size
+
+            for j in range(layer_size):
+
+                print(layer['kernel'].shape)
+
+                # each entry in ['bias'] represents a node in this layer
+                # create a new node
+                new_node = new_genome.create_node(neat_config.genome_config, new_node_id)
+                # set the bias of the node
+                new_genome.nodes[new_node_id] = new_node
+                setattr(new_genome.nodes[new_node_id], 'bias', layer["bias"][j])
+
+                # add the connections to the previous layer
+                # NOTE: Assumes a fully connected network
+                if layer_id == 0:
+                    print("Connecting the inputs..")
+                    # connect to the inputs (ID is negative)
+                    for k in range(-1, -num_inputs-1, -1):
+                        print("connecting {} to {}".format(k, new_node_id))
+                        new_genome.add_connection(neat_config.genome_config, k, new_node_id, layer["kernel"][k][j], True)
+                elif layer_id == len(model_data)-1:
+                    print("Connecting the outputs..")
+                    print(
+                        "Connecting {}-{} to {}-{}".format(prev_layer_first_id, prev_layer_last_id, 0,
+                                                           num_outputs-1))
+                    # connect to the outputs
+                    for k_i, k in enumerate(layer['kernel']):
+                        for o in range(num_outputs):
+                            print("connecting {} to {}".format(k_i + prev_layer_first_id, o))
+                            new_genome.add_connection(neat_config.genome_config, k_i + prev_layer_first_id, o,
+                                                      k[j], True)
+                    complete = True
+                    print("Complete")
+                    break
+
+                else:
+                    print("Connecting hidden layer {}..".format(layer_id))
+                    # connect to the previous layer
+                    #print("Previous layer: {}".format(model_data[layer_id - 1]))
+                    print("Previous layer len: {}".format(prev_layer_size))
+
+                    print("Connecting {}-{} to {}-{}".format(prev_layer_first_id, prev_layer_last_id, layer_first_node_id, layer_last_id))
+                    for k_i, k in enumerate(layer['kernel']):
+                        print("connecting {} to {}".format(k_i+prev_layer_first_id, new_node_id))
+                        new_genome.add_connection(neat_config.genome_config, k_i+prev_layer_first_id, new_node_id, k[j], True)
+
+                new_node_id += 1
+
+                prev_layer_size = layer_size
+
+
+        print(new_genome)
+        visualize.draw_net(neat_config, new_genome, view=False, filename="TEST")
+
+        print("EXITING..")
+        sys.exit(0)
+
+
     def ask_for_help(self):
         # TODO
         print("STAGNATION - Asking for help..")
@@ -81,12 +172,16 @@ class Mario:
         self.env.initial_state = self.human_start_state
 
         # Take the human input
-        human_io = get_human_input(self.env)
+        human_io = get_human_input(self.env) # returns A list of tuples: (obs, info, action)
         print("Number of human_io samples: {}".format(len(human_io)))
 
         inputs = np.asarray([get_network_inputs(h_io[0], h_io[1], self.config) for h_io in human_io])
-        expected_outputs = np.asarray([h_io[2] for h_io in human_io])
+        #expected_outputs = np.asarray([h_io[2] for h_io in human_io])
+        expected_outputs = np.asarray([np.append(h_io[2][:1], h_io[2][2:]) for h_io in human_io]) # removes the second position control
+
         model = train(inputs, expected_outputs)
+
+        self.convert_human_intervention_model_to_neat(self.neat_config)
 
         assert(len(human_io)==1)
         self.taught_responses.append((inputs, model))
@@ -166,7 +261,6 @@ class Mario:
 
                     # render every 10th frame in simulation or every frame if fps limit is set
                     self.env.render()
-                print(joystick_inputs)
 
                 self.current_frame, rew, done, self.current_info = self.env.step(joystick_inputs)
 
