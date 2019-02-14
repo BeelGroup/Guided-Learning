@@ -7,6 +7,8 @@ from keras.models import load_model
 
 import numpy as np
 
+import neat, visualize
+
 import h5py, json
 
 import sys
@@ -64,6 +66,7 @@ def save_model(model):
     # serialize weights to HDF5
     model.save_weights("model.h5")
 
+
 def load_keras2neat_model_data(hdf5_weight_path):
     '''
     :param hdf5_weight_path: The path to the Keras HDF5 weight file for a fully dense network
@@ -86,3 +89,86 @@ def load_keras2neat_model_data(hdf5_weight_path):
             ret.append(temp)
 
     return ret
+
+
+def keras2neat(neat_config):
+    print("Loading model data..")
+    model_data = load_keras2neat_model_data('model.h5')
+    print("Loaded.")
+
+    # TODO: Establish what the key should be
+    new_genome = neat.DefaultGenome('NEW_KEY')
+
+    num_inputs = model_data[0]['kernel'].shape[0]
+    num_outputs = model_data[-1]['kernel'].shape[1]
+
+    new_node_id = num_outputs
+    prev_layer_size = None
+    total_layer_size = 0
+    prev_layer_first_id = 0
+    prev_layer_last_id = 0
+    layer_last_id = 0
+    complete = False
+
+    print("output bias: {}\n output kernel: {}".format(model_data[-1]["bias"], model_data[-1]['kernel']))
+
+    # create the output nodes
+    for o in range(num_outputs):
+        new_node = new_genome.create_node(neat_config.genome_config, o)
+        # set the bias of the node
+        setattr(new_node, 'bias', model_data[-1]["bias"][o])
+        new_genome.nodes[o] = new_node
+
+    for layer_id, layer in enumerate(model_data):
+        if complete:
+            break
+        layer_size = layer["bias"].shape[0]
+        layer_first_node_id = new_node_id
+        total_layer_size += layer_size
+        if layer_id != 0:
+            prev_layer_first_id = new_node_id - prev_layer_size
+            prev_layer_last_id = prev_layer_first_id + prev_layer_size
+            layer_last_id = layer_first_node_id + layer_size
+        for j in range(layer_size):
+            #print(layer['kernel'].shape)
+            # each entry in ['bias'] represents a node in this layer
+            # create a new node
+            new_node = new_genome.create_node(neat_config.genome_config, new_node_id)
+            # set the bias of the node
+            setattr(new_node, 'bias', layer["bias"][j])
+
+            new_genome.nodes[new_node_id] = new_node
+
+            # add the connections to the previous layer
+            # NOTE: Assumes a fully connected network
+            if layer_id == 0:
+                #print("Connecting the inputs..")
+                # connect to the inputs (ID is negative)
+                for k in range(-1, -num_inputs - 1, -1):
+                    #print("connecting {} to {}".format(k, new_node_id))
+                    new_genome.add_connection(neat_config.genome_config, k, new_node_id, layer["kernel"][k][j],
+                                              True)
+            elif layer_id == len(model_data) - 1:
+                print("Connecting the outputs..")
+
+                for p in range(prev_layer_size):
+                    for o in range(num_outputs):
+                        # connect the prev_layer to the output
+                        print("connecting {} to {}".format(p + prev_layer_first_id, o))
+                        new_genome.add_connection(neat_config.genome_config, p + prev_layer_first_id, o,
+                                                  layer['kernel'][p][o], True)
+                complete = True
+                break
+            else:
+                #print("Connecting hidden layer {}..".format(layer_id))
+                # connect to the previous layer
+                for k_i, k in enumerate(layer['kernel']):
+                    #print("connecting {} to {}".format(k_i + prev_layer_first_id, new_node_id))
+                    new_genome.add_connection(neat_config.genome_config, k_i + prev_layer_first_id, new_node_id,
+                                              k[j], True)
+            new_node_id += 1
+            prev_layer_size = layer_size
+
+    visualize.draw_net(neat_config, new_genome, view=False, filename="TEST")
+
+    return neat.nn.FeedForwardNetwork.create(new_genome, neat_config)
