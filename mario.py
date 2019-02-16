@@ -43,7 +43,7 @@ class Mario:
         self.current_best_genome = None
         self.start_state = self.env.initial_state
         self.human_start_state = None
-        self.taught_responses = [] # list of tuples (input, model)
+        self.taught_responses = [] # list of tuples (input, model, count)
 
         self.debug = self.config['DEFAULT'].getboolean('debug')
         self.debug_graphs = self.config['DEFAULT'].getboolean('debug_graphs')
@@ -83,11 +83,14 @@ class Mario:
         self.env.initial_state = self.human_start_state
 
         # Take the human input
-        human_io = get_human_input(self.env) # returns A list of tuples: (obs, info, action)
+        human_io, human_io_count = get_human_input(self.env) # returns A list of tuples: (obs, info, action)
         if len(human_io) == 0:
             print("[ask_for_help] No input received. Continuing.")
         else:
             print("[ask_for_help] Number of human_io samples: {}".format(len(human_io)))
+            print("[ask_for_help] Len of each sample: {}".format(human_io_count))
+
+            assert(len(human_io) == 1 and len(human_io_count) == 1, "Only single shot TRMs are supported!!!")
 
             inputs = np.asarray([get_network_inputs(h_io[0], h_io[1], self.config) for h_io in human_io])
             # remove the second position control
@@ -102,7 +105,7 @@ class Mario:
             neat_genome_ff = neat.nn.FeedForwardNetwork.create(neat_genome, self.neat_config)
             print("[ask_for_help] NEAT_GENOME_PREDICT: {}".format(neat_genome_ff.activate(inputs[0])))
 
-            self.taught_responses.append((inputs, neat_genome))
+            self.taught_responses.append((inputs, neat_genome, human_io_count))
 
             print("[ask_for_help] Evaluating the trained network..")
             self.evaluate_genome(neat_genome, fps=30)
@@ -114,7 +117,7 @@ class Mario:
     def get_taught_response(self):
         if len(self.taught_responses) > 0:
             current_inputs = np.asarray(get_network_inputs(self.current_frame, self.current_info, self.config))
-            for mem_inputs, mem in self.taught_responses:
+            for mem_inputs, mem, count in self.taught_responses:
                 if abs(np.sum(current_inputs - mem_inputs)) < 0.02:
                     print("[get_taught_response] Triggering TRN..")
                     print("[get_taught_response] Diff: {}".format(abs(np.sum(current_inputs - mem_inputs))))
@@ -177,7 +180,7 @@ class Mario:
 
                 if using_TRM and t % 10 == 0:
                     using_TRM = False
-                    
+
                 if (t % 10 == 0 or self.frame_delay != 0) and not using_TRM:
                     if self.current_info:
                         inputs = get_network_inputs(self.current_frame, self.current_info, self.config)

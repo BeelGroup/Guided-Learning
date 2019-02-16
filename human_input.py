@@ -64,10 +64,14 @@ def get_human_input(env):
 
     steps = 0
     recorded_io = []
+    recorded_io_count = []
 
     started = False
     first_key = True
     timer_start = get_epochtime_ms()
+    prev_action = None
+    action_count = 1
+
     print("Waiting for input..")
     while True:
         win.dispatch_events()
@@ -77,9 +81,11 @@ def get_human_input(env):
         keys_clicked = set()
         keys_pressed = set()
         key_clicked = False
+        key_pressed = False
         for key_code, pressed in key_handler.items():
             if pressed:
                 keys_pressed.add(key_code)
+                key_pressed = True
 
             if not key_previous_states.get(key_code, False) and pressed:
                 keys_clicked.add(key_code)
@@ -124,6 +130,16 @@ def get_human_input(env):
                 if first_key:
                     first_key = False
 
+            if key_pressed:
+                if prev_action != None:
+                    if (action == prev_action).all():
+                        action_count += 1
+                    else:
+                        recorded_io_count.append(action_count)
+                        action_count = 1
+
+                prev_action = action
+
             #if steps % save_period == 0 or key_clicked):
 
             steps += 1
@@ -158,4 +174,6 @@ def get_human_input(env):
     pyglet.app.platform_event_loop.stop()
     win.close()
 
-    return recorded_io
+    recorded_io_count = recorded_io_count[1:] # remove the first entry (before the first action takes place)
+
+    return recorded_io, recorded_io_count
