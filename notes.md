@@ -42,6 +42,7 @@ When I was attempting more general segmentation this performed the best:
 ```
 plt.imshow(felzenszwalb(frame, sigma=1.5), interpolation='nearest', cmap="gray")
 ```
+However, I decided to use an averaged value for each 16x16 tile. This is not ideal but is the simpliest solution for a single level. A more general solution would be to take each 16x16 tile and classify it as {brick, pipe, background, etc}. This would require manual human labelling of each previously unseen tile.
 
 ### Backup saves
 Backup saves of the Mario obj are made to the saves/ directory each generation
