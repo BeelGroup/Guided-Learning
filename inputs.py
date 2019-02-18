@@ -63,8 +63,9 @@ def get_screen_inputs(frame, info, mario_config):
         plt.grid(True)
         plt.show()
 
-    # normalize the tile_inputs array
+    # normalize the tile_inputs array ??
     return normalize_list(tile_inputs, 0, 1)
+    #return tile_inputs
 
 
 def get_tiles(frame, tile_width, tile_height, x_scroll_lo, player_pos=None, radius=None, display_tiles=False):

@@ -43,7 +43,7 @@ class Mario:
         self.current_best_genome = None
         self.start_state = self.env.initial_state
         self.human_start_state = None
-        self.taught_responses = [] # list of tuples (input, model, count)
+        self.taught_responses = [] # list of tuples (input, model, count, best_fitness)
 
         self.debug = self.config['DEFAULT'].getboolean('debug')
         self.debug_graphs = self.config['DEFAULT'].getboolean('debug_graphs')
@@ -77,13 +77,14 @@ class Mario:
         # take input here to verify help being given
 
         # play the best genome up to just before it dies
-        self.evaluate_genome(self.current_best_genome, fps=30, human_intervention=True)
+        self.evaluate_genome(self.current_best_genome, human_intervention=True)
         # save the current state
         self.human_start_state = self.env.em.get_state()
         self.env.initial_state = self.human_start_state
 
-        # Take the human input
-        human_io, human_io_count = get_human_input(self.env) # returns A list of tuples: (obs, info, action)
+
+        # Take the human input (A list of tuples: (obs, info, action), count of each action)
+        human_io, human_io_count = get_human_input(self.env)
         if len(human_io) == 0:
             print("[ask_for_help] No input received. Continuing.")
         else:
@@ -105,10 +106,21 @@ class Mario:
             neat_genome_ff = neat.nn.FeedForwardNetwork.create(neat_genome, self.neat_config)
             print("[ask_for_help] NEAT_GENOME_PREDICT: {}".format(neat_genome_ff.activate(inputs[0])))
 
-            self.taught_responses.append((inputs, neat_genome, human_io_count))
+            tr_score_replacement_threshold = 10
+            replace_trm = -1
+            for i, tr in enumerate(self.taught_responses):
+                if abs(tr[3]- self.neat.best_genome.fitness) < tr_score_replacement_threshold:
+                    replace_trm = i
+                    print("[ask_for_help] Replacing TRM: {}".format(i))
+                    print("[ask_for_help] Number of TRMs: {}".format(len(self.taught_responses)))
+                    break
+            if replace_trm == -1:
+                self.taught_responses.append((inputs, neat_genome, human_io_count, self.neat.best_genome.fitness))
+            else:
+                self.taught_responses[i] = (inputs, neat_genome, human_io_count, self.neat.best_genome.fitness)
 
-            print("[ask_for_help] Evaluating the trained network..")
-            self.evaluate_genome(neat_genome, fps=30)
+            #print("[ask_for_help] Evaluating the trained network..")
+            #self.evaluate_genome(neat_genome, fps=30)
 
         # reset the start state
         self.env.initial_state = self.start_state
@@ -117,26 +129,30 @@ class Mario:
     def get_taught_response(self):
         if len(self.taught_responses) > 0:
             current_inputs = np.asarray(get_network_inputs(self.current_frame, self.current_info, self.config))
-            for mem_inputs, mem, count in self.taught_responses:
-                if abs(np.sum(current_inputs - mem_inputs)) < 0.02:
+            for mem_inputs, mem, count, fitness in self.taught_responses:
+                if abs(np.sum(current_inputs - mem_inputs)) < 0.015: # 0.02 FOR NORMALIZED TILES
+                    print()
                     print("[get_taught_response] Triggering TRN..")
                     print("[get_taught_response] Diff: {}".format(abs(np.sum(current_inputs - mem_inputs))))
-                    print("[get_taught_response] inputs: {}".format(current_inputs))
-                    print("[get_taught_response] inputs.shape: {}".format(current_inputs.shape))
+                    #print("[get_taught_response] inputs: {}".format(current_inputs))
+                    #print("[get_taught_response] inputs.shape: {}".format(current_inputs.shape))
                     mem_net = neat.nn.FeedForwardNetwork.create(mem, self.neat_config)
                     raw_joystick_inputs = mem_net.activate(current_inputs)
 
-                    print("[get_taught_response] TRN output: {}".format(raw_joystick_inputs))
+                    #print("[get_taught_response] TRN output: {}".format(raw_joystick_inputs))
                     # pad 0 into second position
                     joystick_inputs = raw_joystick_inputs[:1] + [0] + raw_joystick_inputs[1:]
                     # round outputs to 0 or 1
                     joystick_inputs = np.asarray([round(x) for x in joystick_inputs], dtype=np.uint8)
 
                     print("[get_taught_response] TRN joystick_inputs: {}".format(joystick_inputs))
+                    print("[get_taught_response] TRN_count: {}".format(count))
+                    print()
 
-                    return joystick_inputs
-        else:
-            return None
+                    return (joystick_inputs, count)
+                #else:
+                #    print("Diff: {}".format(abs(np.sum(current_inputs - mem_inputs))))
+        return (None, None)
 
     def evaluate_genome(self, genome, fps=-1, human_intervention=False):
         '''
@@ -148,7 +164,7 @@ class Mario:
 
         self.frame_delay = 1000 / fps if fps != -1 else 0
 
-        joystick_inputs = np.array([0, 0, 0, 0, 0, 0, 0, 1, 1]).astype(np.uint8)
+        joystick_inputs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]).astype(np.uint8)
 
         try:
             self.current_net = neat.nn.FeedForwardNetwork.create(genome, self.neat_config)
@@ -159,9 +175,10 @@ class Mario:
             totrew = [0] * 1
             self.timeout = int(self.config['NEAT']['timeout'])
 
-            using_TRM = False
+            TRM_count = 0
 
             frame_delay_start_time = get_epochtime_ms()
+
             while True:
 
                 if fps != -1:
@@ -172,16 +189,12 @@ class Mario:
 
                 if self.current_info:
                     # Search for taught response memories
-                    tr = self.get_taught_response()
+                    tr, count = self.get_taught_response()
                     if tr is not None:
                         joystick_inputs = tr
-                        using_TRM = True
-                        t = 1
+                        TRM_count = count[0]+10 # SINGLE SHOT ONLY
 
-                if using_TRM and t % 10 == 0:
-                    using_TRM = False
-
-                if (t % 10 == 0 or self.frame_delay != 0) and not using_TRM:
+                if (t % 10 == 0 or self.frame_delay != 0) and TRM_count==0:
                     if self.current_info:
                         inputs = get_network_inputs(self.current_frame, self.current_info, self.config)
                         raw_joystick_inputs = self.current_net.activate(inputs)
@@ -190,31 +203,22 @@ class Mario:
                         # round outputs to 0 or 1
                         joystick_inputs = np.asarray([round(x) for x in joystick_inputs], dtype=np.uint8)
 
+                if t % 10 == 0 or self.frame_delay != 0:
                     # render every 10th frame in simulation or every frame if fps limit is set
                     self.env.render()
+
+                if TRM_count > 0:
+                    TRM_count -= 1
 
                 self.current_frame, rew, done, self.current_info = self.env.step(joystick_inputs)
 
                 t += 1
 
-                rew = [rew]
-                for i, r in enumerate(rew):
-                    totrew[i] += r
-                    if r > 0:
-                        self.timeout = int(self.config['NEAT']['timeout'])
-                    else:
-                        self.timeout -= 1
-                        if self.timeout < 0:
-                            done = True
-                    if self.verbosity > 1:
-                        if r > 0:
-                            print('t=%i p=%i got reward: %g, current reward: %g' % (t, i, r, totrew[i]))
-                        if r < 0:
-                            print('t=%i p=%i got penalty: %g, current reward: %g' % (t, i, r, totrew[i]))
+                done = self.determine_done_condition(rew, totrew)
 
                 if human_intervention:
                     # we are playing the best genome up to just before the stagnation point
-                    if totrew[0] > genome.fitness-100:
+                    if totrew[0] > genome.fitness-50:
                         break
 
                 if done:
@@ -240,12 +244,13 @@ class Mario:
             self.current_best_genome = self.neat.best_genome
             print("Best of gen: {} -- Fitness: {!s} -- Shape: {}".format(self.neat.generation-1, self.neat.best_genome.fitness, self.neat.best_genome.size()))
 
-            if prev_best_fitness is not None and prev_best_fitness <= self.neat.best_genome.fitness:
+            if prev_best_fitness is not None and prev_best_fitness == self.neat.best_genome.fitness:
                 stagnation_count += 1
             else:
                 prev_best_fitness = self.neat.best_genome.fitness
+                stagnation_count = 0
 
-            if stagnation_count > 1:
+            if stagnation_count > 2:
                 stagnation_count = 0
                 self.ask_for_help()
 
@@ -260,3 +265,16 @@ class Mario:
             else:
                 print("Statistics and backup are disabled.")
 
+    def determine_done_condition(self, rew, totrew):
+        done = False
+        rew = [rew]
+        for i, r in enumerate(rew):
+            totrew[i] += r
+            if r > 0:
+                self.timeout = int(self.config['NEAT']['timeout'])
+            else:
+                self.timeout -= 1
+                if self.timeout < 0:
+                    done = True
+                    break
+        return done

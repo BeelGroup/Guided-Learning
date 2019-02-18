@@ -13,6 +13,9 @@ SUPER MARIO BROS actions:
 * [run (B), None, (Select), (Start), (Up), (Down), (Left), (Right), jump (A)]
 * NEAT outputs do not include the None, it's padded in later with 0
 
+If the 'jump' button is held, Mario will only jump once, and the height depends on the duration the button is held.
+* This can cause it to look like TRMs are not triggering them they should be. This is just a result of the NEAT output holding down 'jump'.
+
 Creating an action array:
 ```
 ac = [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
@@ -67,5 +70,5 @@ These 'single action' taught memories can be triggered by simply getting the vec
 
 The issue with this is that many inputs are time series dependant (i.e. how high Mario jumps depends on how long the 'jump' button is held). A temporary solution to this is to count the duration of the action during human recording. THIS IS NOT IDEAL
 
-
+If a new TRM does not lead to progression it is replaced with the next TRM. Replacement is determined based on the score that the human intervention is triggered at
 
