@@ -64,7 +64,7 @@ def get_screen_inputs(frame, info, mario_config):
         plt.show()
 
     # normalize the tile_inputs array ??
-    return normalize_list(tile_inputs, 0, 1)
+    return normalize_list(tile_inputs)
     #return tile_inputs
 
 

@@ -30,9 +30,11 @@ def stitch_tiles(tiles, tile_width, tile_height):
         ret = np.concatenate((ret, tmp), axis=1)
     return ret
 
+#def normalize_list(l, lower, upper):
+#    return [lower + ((x-min(l)*(upper-lower))/(max(l)-min(l))) for x in l]
 
-def normalize_list(l, lower, upper):
-    return [lower + ((x-min(l)*(upper-lower))/(max(l)-min(l))) for x in l]
+def normalize_list(l):
+    return [float(x)/max(l) for x in l]
 
 def pad(array, reference_shape, offset, dtype):
     """
