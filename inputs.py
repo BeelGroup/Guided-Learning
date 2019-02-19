@@ -164,14 +164,14 @@ def get_tile_index_of_player(tiles, player_pos, tile_width, tile_height):
         p = (p[0], 208)
 
     for i, row in enumerate(tiles):
-        if p[1] > i * tile_height and p[1] <= (i + 1) * tile_height:
+        if p[1] >= i * tile_height and p[1] <= (i + 1) * tile_height:
             p_row = i
         else:
             continue
         for j, col in enumerate(row):
-            if p[0] > j * tile_width and p[0] <= (j + 1) * tile_width:
+            if p[0] >= j * tile_width and p[0] <= (j + 1) * tile_width:
                 p_col = j
     if p_col is None or p_row is None:
-        print("ERR: [get_tile_index_of_player] p_col and p_row must not be None! player_pos: {}".format(p))
+        print("ERR: [get_tile_index_of_player] p_col and p_row must not be None! player_pos: {}\n".format(p))
 
     return (p_col, p_row)
