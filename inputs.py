@@ -59,7 +59,7 @@ def get_screen_inputs(frame, info, mario_config):
         major_ticks = np.arange(0, 256, 16)
         ax.set_xticks(major_ticks)
         ax.set_yticks(major_ticks)
-        ax.imshow(stitch_tiles(tiles, 16, 16))
+        ax.imshow(stitch_tiles(tiles, 16, 16), cmap="gray")
         plt.grid(True)
         plt.show()
 

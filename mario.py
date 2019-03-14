@@ -45,8 +45,12 @@ class Mario:
         self.human_start_state = None
         self.taught_responses = [] # list of tuples (input, model, count, best_fitness)
 
+        self.enable_human_intervention = self.config['DEFAULT'].getboolean('human_intervention')
         self.debug = self.config['DEFAULT'].getboolean('debug')
         self.debug_graphs = self.config['DEFAULT'].getboolean('debug_graphs')
+
+        if not self.enable_human_intervention:
+            print("HUMAN INTERVENTION IS DISABLED!")
 
         # Create the population, which is the top-level object for a NEAT run.
         print("Generating NEAT population..")
@@ -130,9 +134,12 @@ class Mario:
         if len(self.taught_responses) > 0:
             current_inputs = np.asarray(get_network_inputs(self.current_frame, self.current_info, self.config))
             for mem_inputs, mem, count, fitness in self.taught_responses:
-                if abs(np.sum(current_inputs - mem_inputs)) < 0.015: # 0.02 FOR NORMALIZED TILES
+                angle_rad = angle_between(current_inputs, mem_inputs.reshape((61,)))
+                if angle_rad < 0.015:
+                #if abs(np.sum(current_inputs - mem_inputs)) < 0.015: # 0.02 FOR NORMALIZED TILES
                     print()
                     print("[get_taught_response] Triggering TRN..")
+                    print("[get_taught_response] Angle: {}".format(angle_rad))
                     print("[get_taught_response] Diff: {}".format(abs(np.sum(current_inputs - mem_inputs))))
                     #print("[get_taught_response] inputs: {}".format(current_inputs))
                     #print("[get_taught_response] inputs.shape: {}".format(current_inputs.shape))
@@ -208,6 +215,9 @@ class Mario:
                     self.env.render()
 
                 if TRM_count > 0:
+                    if TRM_count == 1:
+                        # reset the joystick inputs to avoid jumping problem
+                        joystick_inputs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0]).astype(np.uint8)
                     TRM_count -= 1
 
                 self.current_frame, rew, done, self.current_info = self.env.step(joystick_inputs)
@@ -250,7 +260,7 @@ class Mario:
                 prev_best_fitness = self.neat.best_genome.fitness
                 stagnation_count = 0
 
-            if stagnation_count > 2:
+            if stagnation_count > 1 and self.enable_human_intervention:
                 stagnation_count = 0
                 self.ask_for_help()
 

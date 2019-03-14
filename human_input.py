@@ -173,6 +173,7 @@ def get_human_input(env):
 
     pyglet.app.platform_event_loop.stop()
     win.close()
+    pyglet.app.exit()
 
     recorded_io_count = recorded_io_count[1:] # remove the first entry (before the first action takes place)
 
