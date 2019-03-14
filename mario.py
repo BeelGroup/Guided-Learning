@@ -15,6 +15,7 @@ class Mario:
     def __init__(self, retro_env, neat_config_file, verbosity=0):
 
         #print(get_human_input(retro_env))
+        self.run_name = None
 
         # Load configuration.
         self.config = configparser.ConfigParser()
@@ -72,7 +73,7 @@ class Mario:
         ''' Used to save the current state of self '''
         env = self.env
         self.env = None
-        save_state(self, "saves/gen_{}.bkup".format(self.neat.generation - 1))
+        save_state(self, "saves/run_{}/gen_{}.bkup".format(self.get_run_name(), self.neat.generation - 1))
         self.env = env
 
     def ask_for_help(self):
@@ -103,7 +104,7 @@ class Mario:
 
             model = train_single_shot(inputs, expected_outputs)
 
-            neat_genome = keras2neat(self.neat_config, 'model.h5', new_genome_key=str(len(self.taught_responses)))
+            neat_genome = keras2neat(self.neat_config, 'model.h5', new_genome_key=str(len(self.taught_responses)), run_name=self.get_run_name())
 
             ## TEST
             print("[ask_for_help] KERAS_MODEL_PREDICT: {}".format(model.predict(inputs)))
@@ -239,6 +240,12 @@ class Mario:
         except KeyboardInterrupt:
             exit(0)
 
+    def get_run_name(self):
+        if self.run_name is None:
+            return "1"
+        else:
+            return self.run_name
+
     def run(self, fps=-1, gen_stats=True):
         ''' The main loop '''
 
@@ -266,14 +273,14 @@ class Mario:
 
             if gen_stats:
                 # visualise the champion
-                visualize.draw_net(self.neat_config, self.neat.best_genome, view=False,
-                                   filename="img/gen_{}_genome".format(
-                                       self.neat.generation - 1))
-                visualize.plot_stats(self.neat_stats)
+                #visualize.draw_net(self.neat_config, self.neat.best_genome, view=False,
+                #                   filename="img/{}/gen_{}_genome".format(run_name,
+                #                       self.neat.generation - 1))
+                visualize.plot_stats(self.neat_stats, filename='eval/run_{}/avg_fitness.svg'.format(self.get_run_name()))
                 # save the current state
                 self.save()
             else:
-                print("Statistics and backup are disabled.")
+                print("Statistics and backups are disabled.")
 
     def determine_done_condition(self, rew, totrew):
         done = False

@@ -18,6 +18,7 @@ parser.add_argument('--players', '-p', type=int, default=1, help='number of play
 parser.add_argument('--load', '-l', default='', help='the mario state filename to load')
 parser.add_argument('--limit', '-f', type=int, default=-1, help='limit the fps (default -1 [no limit])')
 parser.add_argument('--disable_gen_stats', '-d', default=False, action='store_true', help='disable statistics and backup')
+parser.add_argument('--name', default='1', help='the name given to the run')
 args = parser.parse_args()
 
 
@@ -27,11 +28,19 @@ def main(config_file):
 
     if args.load != '':
         print("Loading previous Mario state..")
-        mario = load_state("saves/"+args.load)
+        mario = load_state("saves/run_{}/{}.bkup".format(args.name, args.load))
         mario.set_env(env)
+        if args.name == '1':
+            print("Using previous run name: {}".format(mario.get_run_name()))
         print("Loaded.")
     else:
         mario = Mario(env, config_file)
+        mario.run_name = args.name
+
+    dirs = ['eval/run_{}'.format(args.name), 'saves/run_{}'.format(args.name)]
+    for directory in dirs:
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
 
     mario.run(fps=int(args.limit), gen_stats=not args.disable_gen_stats)
 

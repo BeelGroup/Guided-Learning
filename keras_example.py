@@ -91,7 +91,7 @@ def load_keras2neat_model_data(hdf5_weight_path):
     return ret
 
 
-def keras2neat(neat_config, keras_h5_path, new_genome_key):
+def keras2neat(neat_config, keras_h5_path, new_genome_key, run_name='1'):
     new_genome_key = str(new_genome_key)
 
     print("[keras2neat] Loading model data..")
@@ -163,6 +163,6 @@ def keras2neat(neat_config, keras_h5_path, new_genome_key):
             new_node_id += 1
             prev_layer_size = layer_size
 
-    visualize.draw_net(neat_config, new_genome, view=False, filename="human-intervention/img/keras2neat_"+new_genome_key)
+    visualize.draw_net(neat_config, new_genome, view=False, filename="eval/run_{}/keras2neat/{}".format(run_name ,new_genome_key))
 
     return new_genome
