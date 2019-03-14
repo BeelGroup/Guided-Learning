@@ -1,15 +1,41 @@
-import sys, pickle
+import sys, pickle, datetime
 import numpy as np
 
 
 def save_state(obj, save_state_filename):
+    # TODO: Use gzip
     filehandler = open(save_state_filename, 'wb')
     pickle.dump(obj, filehandler)
 
 
 def load_state(save_state_filename):
+    # TODO: Use gzip
     filehandler = open(save_state_filename, 'rb')
     return pickle.load(filehandler)
+
+
+def unit_vector(vector):
+    """ Returns the unit vector of the vector.  """
+    return vector / np.linalg.norm(vector)
+
+
+def angle_between(v1, v2):
+    """ Returns the angle in radians between numpy vectors 'v1' and 'v2'::
+
+            >>> angle_between((1, 0, 0), (0, 1, 0))
+            1.5707963267948966
+            >>> angle_between((1, 0, 0), (1, 0, 0))
+            0.0
+            >>> angle_between((1, 0, 0), (-1, 0, 0))
+            3.141592653589793
+    """
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+
+
+def get_epochtime_ms():
+    return round(datetime.datetime.utcnow().timestamp() * 1000)
 
 
 def stitch_tiles(tiles, tile_width, tile_height):
@@ -24,9 +50,11 @@ def stitch_tiles(tiles, tile_width, tile_height):
         ret = np.concatenate((ret, tmp), axis=1)
     return ret
 
+#def normalize_list(l, lower, upper):
+#    return [lower + ((x-min(l)*(upper-lower))/(max(l)-min(l))) for x in l]
 
-def normalize_list(l, lower, upper):
-    return [lower + ((x-min(l)*(upper-lower))/(max(l)-min(l))) for x in l]
+def normalize_list(l):
+    return [float(x)/max(l) for x in l]
 
 def pad(array, reference_shape, offset, dtype):
     """

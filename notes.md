@@ -13,6 +13,9 @@ SUPER MARIO BROS actions:
 * [run (B), None, (Select), (Start), (Up), (Down), (Left), (Right), jump (A)]
 * NEAT outputs do not include the None, it's padded in later with 0
 
+If the 'jump' button is held, Mario will only jump once, and the height depends on the duration the button is held.
+* This can cause it to look like TRMs are not triggering them they should be. This is just a result of the NEAT output holding down 'jump'.
+
 Creating an action array:
 ```
 ac = [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
@@ -42,6 +45,7 @@ When I was attempting more general segmentation this performed the best:
 ```
 plt.imshow(felzenszwalb(frame, sigma=1.5), interpolation='nearest', cmap="gray")
 ```
+However, I decided to use an averaged value for each 16x16 tile. This is not ideal but is the simpliest solution for a single level. A more general solution would be to take each 16x16 tile and classify it as {brick, pipe, background, etc}. This would require manual human labelling of each previously unseen tile.
 
 ### Backup saves
 Backup saves of the Mario obj are made to the saves/ directory each generation
@@ -58,3 +62,13 @@ Currently normalizing pixel tile data between [0,1]
 Normalizing player and enemy positions by dividing by screen size (%)
 
 When enemies are not drawn then enemy position is (-1,-1)
+
+
+### Taught Memories / Taught Response Networks (TRNs)
+Initially I can use 'single shot/action' taught memories. These comprise of a input sample and a corresponding model that has been trained for the response to the input sample.
+These 'single action' taught memories can be triggered by simply getting the vector difference of the current input and 'single action' taught memory input. If the result is within a certain threshold then we can trigger the taught response network.
+
+The issue with this is that many inputs are time series dependant (i.e. how high Mario jumps depends on how long the 'jump' button is held). A temporary solution to this is to count the duration of the action during human recording. THIS IS NOT IDEAL
+
+If a new TRM does not lead to progression it is replaced with the next TRM. Replacement is determined based on the score that the human intervention is triggered at
+

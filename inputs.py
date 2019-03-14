@@ -1,56 +1,71 @@
-
 from utils import *
+from matplotlib import pyplot as plt
 
 
-import pyglet
+def get_network_inputs(frame, info, mario_config):
+    '''Uses the given frame to compute an output for each 16x16 block of pixels.
+        Extracts player position and enemy positions (-1 if unavailable) from info.
+            Returns: A list of inputs to be fed to the NEAT network '''
 
-def get_keyboard_input(obs, win):
-    key_handler = pyglet.window.key.KeyStateHandler()
+    # player_pos_x, player_pos_y, enemy_n_pos_x, enemy_n_pos_y, tile_input
+    inputs = []
+    inputs = inputs + get_positional_inputs(frame, info)
+    inputs = inputs + get_screen_inputs(frame, info, mario_config)
 
-    joysticks = pyglet.input.get_joysticks()
-    if len(joysticks) > 0:
-        joystick = joysticks[0]
-        joystick.open()
+    return np.asarray(inputs)
+
+
+def get_positional_inputs(frame, info):
+    ret = []
+    # normalize
+    player_pos = get_raw_player_pos(info)
+    ret.append(player_pos[0] / frame.shape[0])
+    ret.append(player_pos[1] / frame.shape[1])
+
+    enemy_pos = get_raw_enemy_pos(info)
+    for enemy in enemy_pos:
+        if enemy != (-1, -1):
+            # normalize
+            ret.append(enemy[0] / frame.shape[0])
+            ret.append(enemy[1] / frame.shape[1])
+        else:
+            ret.append(-1)
+            ret.append(-1)
+    return ret
+
+
+def get_screen_inputs(frame, info, mario_config):
+    if mario_config['NEAT'].getboolean('inputs_greyscale'):
+        frame = np.dot(frame[..., :3], [0.299, 0.587, 0.114])
+        frame.resize((frame.shape[0], frame.shape[1], 1))
+
+    tiles = get_tiles(frame, 16, 16, info['xscrollLo'], player_pos=get_raw_player_pos(info),
+                      radius=int(mario_config['NEAT']['inputs_radius']))
+
+    # Get an array of average values per tile (this may have 3 values for RGB or 1 for greyscale)
+    tile_avg = np.mean(tiles, axis=3, dtype=np.uint16)  # average across tile row
+    tile_avg = np.mean(tile_avg, axis=2, dtype=np.uint16)  # average across tile col
+
+    if mario_config['NEAT'].getboolean('inputs_greyscale'):
+        # the greyscale value is in all 3 positions so just get the first
+        tile_inputs = tile_avg[:, :, 0:1].flatten().tolist()
     else:
-        joystick = None
+        tile_inputs = tile_avg[:, :, :].flatten().tolist()
 
-    win.push_handlers(key_handler)
+    if mario_config['DEFAULT'].getboolean('debug_graphs'):
+        print("[get_screen_inputs] Displaying tile inputs:")
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        major_ticks = np.arange(0, 256, 16)
+        ax.set_xticks(major_ticks)
+        ax.set_yticks(major_ticks)
+        ax.imshow(stitch_tiles(tiles, 16, 16), cmap="gray")
+        plt.grid(True)
+        plt.show()
 
-    key_previous_states = {}
-    button_previous_states = {}
-
-    pyglet.app.platform_event_loop.start()
-
-    while True:
-        win.dispatch_events()
-
-        win.clear()
-
-        keys_clicked = set()
-        keys_pressed = set()
-
-        for key_code, pressed in key_handler.items():
-            if pressed:
-                keys_pressed.add(key_code)
-
-            if not key_previous_states.get(key_code, False) and pressed:
-                keys_clicked.add(key_code)
-            key_previous_states[key_code] = pressed
-
-        buttons_clicked = set()
-        buttons_pressed = set()
-        if joystick is not None:
-            for button_code, pressed in enumerate(joystick.buttons):
-                if pressed:
-                    buttons_pressed.add(button_code)
-
-                if not button_previous_states.get(button_code, False) and pressed:
-                    buttons_clicked.add(button_code)
-                button_previous_states[button_code] = pressed
-
-        print(keys_pressed)
-
-    sys.exit(0)
+    # normalize the tile_inputs array ??
+    return normalize_list(tile_inputs)
+    #return tile_inputs
 
 
 def get_tiles(frame, tile_width, tile_height, x_scroll_lo, player_pos=None, radius=None, display_tiles=False):
@@ -141,19 +156,22 @@ def get_tile_index_of_player(tiles, player_pos, tile_width, tile_height):
     # bound the player position
     if p[0] < 0:
         p = (0, p[1])
+    if p[0] > 224:
+        p = (224, p[1])
     if p[1] < 0:
         p = (p[0], 0)
     if p[1] > 208:
         p = (p[0], 208)
 
     for i, row in enumerate(tiles):
-        if p[1] > i * tile_height and p[1] <= (i + 1) * tile_height:
+        if p[1] >= i * tile_height and p[1] <= (i + 1) * tile_height:
             p_row = i
         else:
             continue
         for j, col in enumerate(row):
-            if p[0] > j * tile_width and p[0] <= (j + 1) * tile_width:
+            if p[0] >= j * tile_width and p[0] <= (j + 1) * tile_width:
                 p_col = j
-    assert (p_col is not None and p_row is not None)
+    if p_col is None or p_row is None:
+        print("ERR: [get_tile_index_of_player] p_col and p_row must not be None! player_pos: {}\n".format(p))
 
     return (p_col, p_row)
