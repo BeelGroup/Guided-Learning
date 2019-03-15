@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def plot_stats(statistics, ylog=False, view=False, filename='img/avg_fitness.svg'):
+def plot_stats(statistics, ylog=False, view=False, stats_filename='stats/fitness.csv', plot_filename='img/avg_fitness.svg'):
     """ Plots the population's average and best fitness. """
     if plt is None:
         warnings.warn("This display is not available due to a missing optional dependency (matplotlib)")
@@ -21,8 +21,8 @@ def plot_stats(statistics, ylog=False, view=False, filename='img/avg_fitness.svg
 
     plt.figure(0, figsize=(30,10))
     plt.plot(generation, avg_fitness, 'b-', label="average")
-    plt.plot(generation, avg_fitness - stdev_fitness, 'g-.', label="-1 sd")
-    plt.plot(generation, avg_fitness + stdev_fitness, 'g-.', label="+1 sd")
+    #plt.plot(generation, avg_fitness - stdev_fitness, 'g-.', label="-1 sd")
+    #plt.plot(generation, avg_fitness + stdev_fitness, 'g-.', label="+1 sd")
     plt.plot(generation, best_fitness, 'r-', label="best")
 
     plt.title("Population's average and best fitness")
@@ -33,11 +33,18 @@ def plot_stats(statistics, ylog=False, view=False, filename='img/avg_fitness.svg
     if ylog:
         plt.gca().set_yscale('symlog')
 
-    plt.savefig(filename)
+    plt.savefig(plot_filename)
     if view:
         plt.show()
 
     plt.close()
+
+    out_str = "gen, avg_fitness, best_fitness\n"
+    stats = zip(generation, avg_fitness, best_fitness)
+    for s in stats:
+        out_str += "{}, {}, {}\n".format(s[0], s[1], s[2])
+    with open(stats_filename, mode='w') as file:
+        file.write(out_str)
 
 
 def plot_spikes(spikes, view=False, filename=None, title=None):

@@ -276,7 +276,8 @@ class Mario:
                 #visualize.draw_net(self.neat_config, self.neat.best_genome, view=False,
                 #                   filename="img/{}/gen_{}_genome".format(run_name,
                 #                       self.neat.generation - 1))
-                visualize.plot_stats(self.neat_stats, filename='eval/run_{}/avg_fitness.svg'.format(self.get_run_name()))
+                visualize.plot_stats(self.neat_stats, stats_filename='eval/run_{}/fitness.csv'.format(
+                    self.get_run_name()), plot_filename='eval/run_{}/avg_fitness.svg'.format(self.get_run_name()))
                 # save the current state
                 self.save()
             else:
