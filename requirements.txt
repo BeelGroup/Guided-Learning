@@ -1,0 +1,9 @@
+numpy==1.16.0
+pyglet==1.3.2
+gym_retro==0.7.0
+graphviz==0.10.1
+h5py==2.9.0
+keras==2.2.4
+matplotlib==3.0.3
+neat==0.4.1
+retro==2.7.0
