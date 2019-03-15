@@ -1,7 +1,6 @@
 @ECHO OFF & SETLOCAL
-CD PATH_TO_SCRIPT
-SET /P INPUT=Number of processes:
-FOR /L %%I IN (1, 1, 2) DO (
+SET /P np=Number of processes:
+FOR /L %%I IN (1, 1, %np%) DO (
    START python main.py --name %%I
 )
 PAUSE
