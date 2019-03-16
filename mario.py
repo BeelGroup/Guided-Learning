@@ -278,8 +278,10 @@ class Mario:
                 #                       self.neat.generation - 1))
                 visualize.plot_stats(self.neat_stats, stats_filename='eval/run_{}/fitness.csv'.format(
                     self.get_run_name()), plot_filename='eval/run_{}/avg_fitness.svg'.format(self.get_run_name()))
-                # save the current state
-                self.save()
+              
+                if (self.neat.generation-1) % 10 == 0:
+                    # save the current state every 10th generation
+                    self.save()
             else:
                 print("Statistics and backups are disabled.")
 
