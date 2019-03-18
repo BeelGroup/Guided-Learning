@@ -18,8 +18,7 @@ class Mario:
         self.run_name = None
 
         # Load configuration.
-        self.config = configparser.ConfigParser()
-        self.config.read('mario.config')
+        self.load_config()
 
         # get the NEAT config
         self.neat_config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
@@ -46,10 +45,6 @@ class Mario:
         self.human_start_state = None
         self.taught_responses = [] # list of tuples (input, model, count, best_fitness)
 
-        self.enable_human_intervention = self.config['DEFAULT'].getboolean('human_intervention')
-        self.debug = self.config['DEFAULT'].getboolean('debug')
-        self.debug_graphs = self.config['DEFAULT'].getboolean('debug_graphs')
-
         if not self.enable_human_intervention:
             print("HUMAN INTERVENTION IS DISABLED!")
 
@@ -68,6 +63,15 @@ class Mario:
         ''' Used to set the Retro env after loading from picked file. '''
         self.env = env
 
+    def load_config(self):
+        ''' Called to ensure the config is kept up to date even when loading a previous save point '''
+        # Load configuration.
+        self.config = configparser.ConfigParser()
+        self.config.read('mario.config')
+        self.enable_human_intervention = self.config['DEFAULT'].getboolean('human_intervention')
+        self.human_buffer = int(self.config['DEFAULT']['human_buffer'])
+        self.debug = self.config['DEFAULT'].getboolean('debug')
+        self.debug_graphs = self.config['DEFAULT'].getboolean('debug_graphs')
 
     def save(self):
         ''' Used to save the current state of self '''
@@ -76,13 +80,13 @@ class Mario:
         save_state(self, "saves/run_{}/gen_{}.bkup".format(self.get_run_name(), self.neat.generation - 1))
         self.env = env
 
-    def ask_for_help(self):
+    def ask_for_help(self, genome):
         print("[ask_for_help] STAGNATION - Asking for help..")
 
         # take input here to verify help being given
 
         # play the best genome up to just before it dies
-        self.evaluate_genome(self.current_best_genome, human_intervention=True)
+        self.evaluate_genome(genome, human_intervention=True)
         # save the current state
         self.human_start_state = self.env.em.get_state()
         self.env.initial_state = self.human_start_state
@@ -96,7 +100,7 @@ class Mario:
             print("[ask_for_help] Number of human_io samples: {}".format(len(human_io)))
             print("[ask_for_help] Len of each sample: {}".format(human_io_count))
 
-            assert(len(human_io) == 1 and len(human_io_count) == 1, "Only single shot TRMs are supported!!!")
+            assert len(human_io) == 1 and len(human_io_count) == 1, "Only single shot TRMs are supported!!!"
 
             inputs = np.asarray([get_network_inputs(h_io[0], h_io[1], self.config) for h_io in human_io])
             # remove the second position control
@@ -104,7 +108,7 @@ class Mario:
 
             model = train_single_shot(inputs, expected_outputs)
 
-            neat_genome = keras2neat(self.neat_config, 'model.h5', new_genome_key=str(len(self.taught_responses)), run_name=self.get_run_name())
+            neat_genome = keras2neat(self.neat_config, 'model.h5', new_genome_key=str(len(self.taught_responses)), run_name=self.get_run_name(), generation=str(self.neat.generation-1))
 
             ## TEST
             print("[ask_for_help] KERAS_MODEL_PREDICT: {}".format(model.predict(inputs)))
@@ -114,15 +118,15 @@ class Mario:
             tr_score_replacement_threshold = 10
             replace_trm = -1
             for i, tr in enumerate(self.taught_responses):
-                if abs(tr[3]- self.neat.best_genome.fitness) < tr_score_replacement_threshold:
+                if abs(tr[3] - genome.fitness) < tr_score_replacement_threshold:
                     replace_trm = i
                     print("[ask_for_help] Replacing TRM: {}".format(i))
                     print("[ask_for_help] Number of TRMs: {}".format(len(self.taught_responses)))
                     break
             if replace_trm == -1:
-                self.taught_responses.append((inputs, neat_genome, human_io_count, self.neat.best_genome.fitness))
+                self.taught_responses.append((inputs, neat_genome, human_io_count, genome.fitness))
             else:
-                self.taught_responses[i] = (inputs, neat_genome, human_io_count, self.neat.best_genome.fitness)
+                self.taught_responses[replace_trm] = (inputs, neat_genome, human_io_count, genome.fitness)
 
             #print("[ask_for_help] Evaluating the trained network..")
             #self.evaluate_genome(neat_genome, fps=30)
@@ -229,13 +233,13 @@ class Mario:
 
                 if human_intervention:
                     # we are playing the best genome up to just before the stagnation point
-                    if totrew[0] > genome.fitness-50:
+                    if totrew[0] > genome.fitness-self.human_buffer:
                         break
 
                 if done:
                     print("GenomeId:%s time:%i fitness:%d" % (genome.key, t, totrew[0]))
                     genome.fitness = totrew[0]
-                    break
+                    return genome.fitness
 
         except KeyboardInterrupt:
             exit(0)
@@ -246,15 +250,33 @@ class Mario:
         else:
             return self.run_name
 
+    def determine_mid_point_stagnation(self, fitness_results, fitness_thresh, count_thresh):
+        most_common = max(set(fitness_results), key=fitness_results.count)
+        count = 0
+        for res in fitness_results:
+            if res > most_common- fitness_thresh and res < most_common+ fitness_thresh:
+                # res is within the threshold
+                count += 1
+        if count > count_thresh:
+            return most_common
+        else:
+            return -1
+
+
     def run(self, fps=-1, gen_stats=True):
         ''' The main loop '''
+        # Reload the configuration in case it has changed from the previous run.
+        self.load_config()
 
         prev_best_fitness = None
         stagnation_count = 0
 
         while True:
+            fitness_results = []
+
             for genome_id, genome in list(iteritems(self.neat.population)):
-                self.evaluate_genome(genome, fps=fps)
+                fitness = self.evaluate_genome(genome, fps=fps)
+                fitness_results.append(fitness)
 
             # All genomes in the current population have been evaluated, get the best genome and move to the next generation
             self.neat.next_generation()
@@ -269,7 +291,18 @@ class Mario:
 
             if stagnation_count > 1 and self.enable_human_intervention:
                 stagnation_count = 0
-                self.ask_for_help()
+                self.ask_for_help(self.neat.best_genome)
+
+                # determine if there is mid-point stagnation in the population
+                mid_point_stag = self.determine_mid_point_stagnation(fitness_results, 10, len(
+                    list(iteritems(self.neat.population)))/3)
+                if mid_point_stag != -1 and mid_point_stag != 0:
+                    print("MID POINT STAGNATION @ {}".format(mid_point_stag))
+                    for g_id, g in list(iteritems(self.neat.population)):
+                        if g.fitness == mid_point_stag:
+                            # take TRM using first genome
+                            self.ask_for_help(g)
+                            break
 
             if gen_stats:
                 # visualise the champion
@@ -279,7 +312,7 @@ class Mario:
                 visualize.plot_stats(self.neat_stats, stats_filename='eval/run_{}/fitness.csv'.format(
                     self.get_run_name()), plot_filename='eval/run_{}/avg_fitness.svg'.format(self.get_run_name()))
               
-                if (self.neat.generation-1) % 10 == 0:
+                if (self.neat.generation-1) % 5 == 0:
                     # save the current state every 10th generation
                     self.save()
             else:

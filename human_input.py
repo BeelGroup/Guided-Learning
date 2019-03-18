@@ -28,7 +28,11 @@ def get_human_input(env):
     key_handler = pyglet.window.key.KeyStateHandler()
     win_width = 700
     win_height = win_width * screen_height // screen_width
-    win = pyglet.window.Window(width=win_width, height=win_height, vsync=False)
+    try:
+        win = pyglet.window.Window(width=win_width, height=win_height, vsync=False)
+    except:
+        print("Exception Occurred: {}".format(sys.exc_info()[0]))
+        return ([], [])
 
     if hasattr(win.context, '_nscontext'):
         pixel_scale = win.context._nscontext.view().backingScaleFactor()
@@ -100,9 +104,22 @@ def get_human_input(env):
             print("Finished Recording")
             break
 
-        if not started:
-            if get_epochtime_ms() - timer_start > 3 * 1000:
-                break
+        if (keycodes.R in keys_clicked):
+            print("Restarting..")
+            obs = env.reset()
+            steps = 0
+            recorded_io = []
+            recorded_io_count = []
+            started = False
+            first_key = True
+            timer_start = get_epochtime_ms()
+            prev_action = None
+            action_count = 1
+            continue
+
+        if not started and get_epochtime_ms() - timer_start > 3 * 1000:
+            # timeout
+            break
         else:
             inputs = {
                 'B': keycodes.X in keys_pressed,
