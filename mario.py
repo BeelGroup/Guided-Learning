@@ -272,6 +272,10 @@ class Mario:
         stagnation_count = 0
 
         while True:
+            if self.neat.generation > 150:
+                print('150 Generations Evaluated')
+                sys.exit(0)
+
             fitness_results = []
 
             for genome_id, genome in list(iteritems(self.neat.population)):

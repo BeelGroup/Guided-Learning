@@ -37,8 +37,8 @@ def get_human_input(env):
     if hasattr(win.context, '_nscontext'):
         pixel_scale = win.context._nscontext.view().backingScaleFactor()
 
-    win.width = win.width // pixel_scale
-    win.height = win.height // pixel_scale
+        win.width = win.width // pixel_scale
+        win.height = win.height // pixel_scale
 
     joysticks = pyglet.input.get_joysticks()
     if len(joysticks) > 0:
