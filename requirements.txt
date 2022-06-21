@@ -1,4 +1,4 @@
-numpy==1.16.0
+numpy==1.22.0
 pyglet==1.3.2
 gym-retro==0.7.0
 graphviz==0.10.1
